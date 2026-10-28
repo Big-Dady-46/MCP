@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Sales (POS){% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Sales — Point of Sale</h1>
+    <p class="page-sub">Commit a sale: stock is deducted atomically</p>
+  </div>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">New sale</h2></div>
+  <form method="post" action="{{ url_for('store.sales') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p class="hint small">Fill up to 5 lines. Qty in selected unit (bottle/crate/carton).</p>
+    {% for i in range(1, 6) %}
+    <div class="grid-2">
+      <div class="field"><label>Product (line {{ i }})</label>
+        <select name="p{{ i }}_id"><option value="">— empty —</option>
+          {% for p in products %}<option value="{{ p.id }}">{{ p.name }} ({{ p.stock_units }} btl left)</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label>Qty / Unit</label>
+        <div class="task-meta">
+          <input name="p{{ i }}_qty" type="number" min="1" placeholder="qty" style="width:5.5rem">
+          <select name="p{{ i }}_unit"><option value="bottle">bottle</option><option value="crate">crate ({{ 0 }})</option><option value="carton">carton</option></select>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="grid-2">
+      <div class="field"><label for="discount">Discount (PKR)</label><input id="discount" name="discount" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label for="payment_method">Payment</label>
+        <select id="payment_method" name="payment_method">
+          {% for m in ['cash','card','bank','easypaisa','jazzcash','credit'] %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label for="paid">Paid now (PKR, blank = full)</label><input id="paid" name="paid" type="number" min="0" step="0.01"></div>
+    </div>
+    <button class="btn btn-primary" type="submit">Commit sale</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Recent sales</h2></div>
+  {% if history %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Receipt</th><th>Total</th><th>Discount</th><th>Paid</th><th>Method</th><th>When</th><th></th></tr></thead>
+      <tbody>
+      {% for s in history %}
+        <tr>
+          <td>{{ s.receipt_no }}</td>
+          <td>PKR {{ "%.2f"|format(s.total) }}</td>
+          <td>PKR {{ "%.2f"|format(s.discount) }}</td>
+          <td>PKR {{ "%.2f"|format(s.paid) }}</td>
+          <td><span class="badge badge-neutral">{{ s.payment_method }}</span></td>
+          <td class="muted small">{{ s.created_at }}</td>
+          <td><a class="btn btn-sm btn-secondary" href="{{ url_for('store.receipt', sale_id=s.id) }}">Receipt</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="empty-title">No sales yet</p><p class="muted small">Use the form above to ring up your first sale.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

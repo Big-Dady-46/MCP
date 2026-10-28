@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Store Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Beverage Store — Dashboard</h1>
+    <p class="page-sub">Live data from store.db · PKR</p>
+  </div>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('store.sales') }}">New Sale (POS)</a>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+{% if summary %}
+<section class="stat-grid">
+  <div class="stat"><span class="stat-label">Today's revenue</span><span class="stat-value">PKR {{ "%.2f"|format(summary.today_revenue) }}</span></div>
+  <div class="stat"><span class="stat-label">Today's gross profit</span><span class="stat-value">PKR {{ "%.2f"|format(summary.today_gross_profit) }}</span></div>
+  <div class="stat"><span class="stat-label">Sales today</span><span class="stat-value">{{ summary.today_sales_count }}</span></div>
+  <div class="stat"><span class="stat-label">Stock value (cost)</span><span class="stat-value">PKR {{ "%.2f"|format(summary.stock_value) }}</span></div>
+  <div class="stat"><span class="stat-label">Low stock items</span><span class="stat-value">{{ low|length }}</span></div>
+  <div class="stat"><span class="stat-label">Supplier payables</span><span class="stat-value">PKR {{ "%.2f"|format(payables) }}</span></div>
+</section>
+
+{% if low %}
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Low stock — restock soon</h2></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Product</th><th>Stock</th><th>Reorder level</th></tr></thead>
+      <tbody>
+      {% for p in low %}
+        <tr><td>{{ p.name }}</td><td>{{ p.stock_units }} bottles</td><td>{{ p.reorder_level }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Recent transactions</h2></div>
+  {% if recent %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Type</th><th>Reference</th><th>Amount</th><th>When</th></tr></thead>
+      <tbody>
+      {% for t in recent %}
+        <tr>
+          <td><span class="badge {% if t.type == 'sale' %}badge-ok{% elif t.type == 'expense' %}badge-warn{% else %}badge-neutral{% endif %}">{{ t.type|upper }}</span></td>
+          <td>{{ t.ref }}</td>
+          <td>PKR {{ "%.2f"|format(t.amount) }}</td>
+          <td class="muted small">{{ t.at }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="empty-title">No transactions yet</p><p class="muted small">Make a sale or receive a purchase.</p></div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

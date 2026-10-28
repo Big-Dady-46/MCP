@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Activity Logs{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Activity Logs</h1>
+    <p class="page-sub">Real events from the shared database — <code>source</code> tells you whether the web app or the MCP server did it.</p>
+  </div>
+</div>
+
+<section class="card">
+  {% if activities %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Time (UTC)</th><th>Event</th><th>Detail</th><th>Source</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        {% for a in activities %}
+        <tr>
+          <td class="mono small">{{ a.created_at }}</td>
+          <td><code>{{ a.action }}</code></td>
+          <td>{{ a.detail }}</td>
+          <td><span class="badge {{ 'badge-neutral' }}">{{ a.source }}</span></td>
+          <td><span class="badge {{ 'badge-ok' if a.result == 'success' else 'badge-err' }}">{{ a.result }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <svg class="ic ic-28" aria-hidden="true"><use href="#i-list"/></svg>
+    <p class="empty-title">No activity recorded yet</p>
+    <p class="muted small">Create, complete or delete a task — from here or through MCP — and the event will appear.</p>
+  </div>
+  {% endif %}
+</section>
+
+{% endblock %}

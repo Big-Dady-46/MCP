@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Purchases{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Purchases & Suppliers</h1>
+  <p class="page-sub">Purchases increase stock (they are NOT expenses)</p></div>
+</div>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Receive purchase</h2></div>
+  <form method="post" action="{{ url_for('store.purchases') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="form" value="purchase">
+    <div class="grid-2">
+      <div class="field"><label>Supplier</label><select name="supplier_id"><option value="0">— none —</option>{% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Ref no</label><input name="ref_no" type="text" maxlength="60" placeholder="invoice #"></div>
+    </div>
+    {% for i in range(1, 5) %}
+    <div class="grid-2">
+      <div class="field"><label>Product (line {{ i }})</label><select name="p{{ i }}_id"><option value="">— empty —</option>{% for p in products %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Qty (bottles) / Cost per bottle</label>
+        <div class="task-meta">
+          <input name="p{{ i }}_qty" type="number" min="1" placeholder="qty" style="width:5.5rem">
+          <input name="p{{ i }}_cost" type="number" min="0.01" step="0.01" placeholder="cost" style="width:6.5rem">
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="grid-2">
+      <div class="field"><label>Paid now (PKR)</label><input name="paid" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label>Status</label><select name="status"><option value="unpaid">unpaid</option><option value="partial">partial</option><option value="paid">paid</option></select></div>
+    </div>
+    <button class="btn btn-primary" type="submit">Receive &amp; add stock</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Supplier balances</h2></div>
+  {% if balances %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Supplier</th><th>Phone</th><th>Balance owed</th></tr></thead>
+    <tbody>{% for b in balances %}<tr><td>{{ b.name }}</td><td>{{ b.phone or '—' }}</td><td>PKR {{ "%.2f"|format(b.balance_owed) }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted small" style="padding:1rem">No suppliers yet.</p>{% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Add supplier</h2></div>
+  <form method="post" action="{{ url_for('store.purchases') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="form" value="supplier">
+    <div class="grid-2">
+      <div class="field"><label>Name *</label><input name="name" type="text" maxlength="120" required></div>
+      <div class="field"><label>Phone</label><input name="phone" type="text" maxlength="30"></div>
+      <div class="field"><label>Address</label><input name="address" type="text" maxlength="200"></div>
+    </div>
+    <button class="btn btn-secondary" type="submit">Add supplier</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Purchase history</h2></div>
+  {% if history %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>#</th><th>Supplier</th><th>Items</th><th>Total</th><th>Paid</th><th>Status</th><th>When</th></tr></thead>
+    <tbody>{% for pu in history %}
+      <tr><td>{{ pu.id }}</td><td>{{ pu.supplier_name or '—' }}</td><td>{{ pu['items']|length }} line(s)</td>
+      <td>PKR {{ "%.2f"|format(pu.total) }}</td><td>PKR {{ "%.2f"|format(pu.paid) }}</td>
+      <td><span class="badge {% if pu.status == 'paid' %}badge-ok{% elif pu.status == 'partial' %}badge-warn{% else %}badge-err{% endif %}">{{ pu.status }}</span></td>
+      <td class="muted small">{{ pu.created_at }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty"><p class="empty-title">No purchases yet</p></div>{% endif %}
+</section>
+{% endblock %}

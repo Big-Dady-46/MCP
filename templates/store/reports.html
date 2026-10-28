@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Business Reports</h1><p class="page-sub">This month · from live store.db</p></div>
+</div>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+{% if pl %}
+<section class="stat-grid">
+  <div class="stat"><span class="stat-label">Revenue</span><span class="stat-value">PKR {{ "%.2f"|format(pl.revenue) }}</span></div>
+  <div class="stat"><span class="stat-label">COGS</span><span class="stat-value">PKR {{ "%.2f"|format(pl.cogs) }}</span></div>
+  <div class="stat"><span class="stat-label">Gross profit</span><span class="stat-value">PKR {{ "%.2f"|format(pl.gross_profit) }}</span></div>
+  <div class="stat"><span class="stat-label">Expenses</span><span class="stat-value">PKR {{ "%.2f"|format(pl.expenses) }}</span></div>
+  <div class="stat"><span class="stat-label">Net profit</span><span class="stat-value {% if pl.net_operating_profit < 0 %}text-warning{% else %}text-success{% endif %}">PKR {{ "%.2f"|format(pl.net_operating_profit) }}</span></div>
+  <div class="stat"><span class="stat-label">Gross margin</span><span class="stat-value">{{ "%.1f"|format((pl.gross_profit / pl.revenue * 100) if pl.revenue else 0) }}%</span></div>
+</section>
+{% endif %}
+
+{% if valuation %}
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Stock valuation</h2></div>
+  <div class="kv">
+    <span class="muted">Total bottles</span><span>{{ valuation.units }}</span>
+    <span class="muted">Cost value</span><span>PKR {{ "%.2f"|format(valuation.cost_value) }}</span>
+    <span class="muted">Retail value</span><span>PKR {{ "%.2f"|format(valuation.retail_value) }}</span>
+  </div>
+</section>
+{% endif %}
+
+{% if balances %}
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Supplier balances (payables)</h2></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Supplier</th><th>Balance owed</th></tr></thead>
+    <tbody>{% for b in balances %}<tr><td>{{ b.name }}</td><td>PKR {{ "%.2f"|format(b.balance_owed) }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+{% if report_text %}
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Report (text)</h2></div>
+  <pre class="small" style="white-space:pre-wrap;padding:1rem">{{ report_text }}</pre>
+</section>
+{% endif %}
+{% endblock %}

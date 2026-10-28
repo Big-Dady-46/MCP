@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Receipt{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Receipt {{ sale.receipt_no if sale else '' }}</h1>
+    <p class="page-sub">Prices & costs captured at sale time</p>
+  </div>
+  <a class="btn btn-secondary btn-sm" href="{{ url_for('store.sales') }}">Back to POS</a>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+{% if sale %}
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Sale #{{ sale.id }}</h2></div>
+  <div class="kv">
+    <span class="muted">Date</span><span>{{ sale.created_at }}</span>
+    <span class="muted">Payment</span><span>{{ sale.payment_method }}</span>
+    <span class="muted">Items</span><span>{{ sale['items']|length }} line(s)</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Cost</th><th>Line total</th><th>Line profit</th></tr></thead>
+      <tbody>
+      {% for it in sale['items'] %}
+        <tr>
+          <td>{{ it.product_name }}</td>
+          <td>{{ it.qty_units }} btl</td>
+          <td>PKR {{ "%.2f"|format(it.unit_price) }}</td>
+          <td>PKR {{ "%.2f"|format(it.unit_cost) }}</td>
+          <td>PKR {{ "%.2f"|format(it.line_total) }}</td>
+          <td>PKR {{ "%.2f"|format((it.unit_price - it.unit_cost) * it.qty_units) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="kv">
+    <span class="muted">Subtotal</span><span>PKR {{ "%.2f"|format(sale.subtotal) }}</span>
+    <span class="muted">Discount</span><span>PKR {{ "%.2f"|format(sale.discount) }}</span>
+    <span class="muted"><strong>Total</strong></span><span><strong>PKR {{ "%.2f"|format(sale.total) }}</strong></span>
+    <span class="muted">Paid</span><span>PKR {{ "%.2f"|format(sale.paid) }}</span>
+    <span class="muted">Change</span><span>PKR {{ "%.2f"|format(sale.change) }}</span>
+    <span class="muted">COGS</span><span>PKR {{ "%.2f"|format(cogs) }}</span>
+    <span class="muted">Gross profit</span><span class="text-success">PKR {{ "%.2f"|format(sale.total - cogs) }}</span>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

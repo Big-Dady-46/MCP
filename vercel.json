@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "flask",
+  "functions": {
+    "app.py": {
+      "excludeFiles": "{.venv/**,venv/**,tests/**,.agents/**,**/*.db,**/*.db-wal,**/*.db-shm,*_OUTPUT.txt,acceptance_audit.py,client_integration_check.py,verify.py,notes_server/**,.opencode/**}"
+    }
+  },
+  "headers": [
+    {
+      "source": "/healthz",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}

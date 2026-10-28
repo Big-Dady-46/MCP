@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}MCP Tools{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">MCP Tools</h1>
+    <p class="page-sub">Tools actually registered by <code>mcp_server.py</code>, read live from the SDK.</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% elif tools %}
+
+<div class="tool-list">
+  {% for t in tools %}
+  <section class="card tool">
+    <div class="card-head">
+      <div class="tool-name-wrap">
+        <code class="tool-name">{{ t.name }}</code>
+        {% if t.read_only %}<span class="badge badge-ok">Read-only</span>
+        {% else %}<span class="badge badge-warn">{{ t.mode }}</span>{% endif %}
+        {% if t.annotations.destructive_hint %}<span class="badge badge-err">Destructive</span>{% endif %}
+      </div>
+      <span class="muted small">SDK-generated schema</span>
+    </div>
+    <p class="tool-desc">{{ t.description }}</p>
+
+    <h3 class="sub-title">Input parameters</h3>
+    {% set props = t.input_schema.get('properties', {}) %}
+    {% set required = t.input_schema.get('required', []) %}
+    {% if props %}
+    <table class="table">
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+      {% for name, spec in props.items() %}
+        <tr>
+          <td><code>{{ name }}</code></td>
+          <td>{{ spec.get('type', spec.get('anyOf', '—')) }}</td>
+          <td>{{ 'Yes' if name in required else 'No' }}</td>
+          <td class="muted">{{ spec.get('description', '—') }}
+            {% if spec.get('enum') %} <span class="muted small">one of: {{ spec.enum|join(', ') }}</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted small">This tool takes no arguments.</p>
+    {% endif %}
+
+    <details class="schema">
+      <summary>Full input schema (JSON)</summary>
+      <pre><code>{{ t.input_schema | tojson(indent=2) }}</code></pre>
+    </details>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Test with MCP Inspector</h2></div>
+  <ol class="explain">
+    <li>Open a terminal in the project folder and activate the environment: <code>.venv\Scripts\Activate.ps1</code></li>
+    <li>Start the Inspector: <code>{{ inspector_cmd }}</code></li>
+    <li>Open the URL it prints (usually <code>http://127.0.0.1:5173</code>).</li>
+    <li>Open the <strong>Tools</strong> tab — you should see all {{ tools|length }} tools with auto-generated forms.</li>
+    <li>Call <code>add_task</code> with <code>{"title": "Created from Inspector"}</code>, then <code>list_tasks</code>.</li>
+    <li>Call <code>complete_task</code> with the returned id, then <code>delete_task</code> with that id.</li>
+    <li>Switch back to <strong>My Tasks</strong> in this web app — the same rows changed, because both use <code>nexusai.db</code>.</li>
+  </ol>
+  <div class="callout">
+    <svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg>
+    <span>Inspector needs Node.js (<code>node -v</code> to check). If it's missing, install the free LTS build from nodejs.org — the <code>mcp dev</code> command uses <code>npx</code> under the hood.</span>
+  </div>
+</section>
+
+{% else %}
+<div class="card"><div class="empty">
+  <svg class="ic ic-28" aria-hidden="true"><use href="#i-wrench"/></svg>
+  <p class="empty-title">No tools registered</p>
+  <p class="muted small">The server module loaded but exposed no tools.</p>
+</div></div>
+{% endif %}
+
+{% endblock %}

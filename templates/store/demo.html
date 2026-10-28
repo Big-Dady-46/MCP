@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Demo Data{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Demo Data</h1>
+  <p class="page-sub">Seeds [DEMO] products/workers/sales · reset deletes ONLY demo rows</p></div>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Current state</h2></div>
+  <p style="padding:0 1rem 1rem">
+    {% if seeded %}<span class="badge badge-ok">Demo data present</span>
+    {% else %}<span class="badge badge-neutral">No demo data</span>{% endif %}
+  </p>
+  <div class="btn-row" style="padding:0 1rem 1rem">
+    <form method="post" action="{{ url_for('store.demo') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="seed">
+      <button class="btn btn-primary" type="submit" {% if seeded %}disabled{% endif %}>Seed demo data</button>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Reset (danger)</h2></div>
+  <form method="post" action="{{ url_for('store.demo') }}"
+        data-confirm="Permanently delete ALL [DEMO] rows? Real data is never touched.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="reset">
+    <div class="field" style="padding:0 1rem">
+      <label><input type="checkbox" name="confirm_reset" value="yes"> I understand this deletes only demo rows</label>
+      <p class="hint">Rows are identified by is_demo=1 flag and [DEMO] name prefix.</p>
+    </div>
+    <button class="btn btn-danger" type="submit" style="margin:0 1rem 1rem">Reset demo data</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}My Tasks{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">My Tasks</h1>
+    <p class="page-sub">{{ stats.total }} total · {{ stats.completed }} completed · {{ stats.pending }} pending</p>
+  </div>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Add a task</h2></div>
+  <form class="task-form" method="post" action="{{ url_for('task_create') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="field">
+      <label for="title">Task title</label>
+      <input id="title" name="title" type="text" maxlength="200" required
+             placeholder="e.g. Learn how MCP tools are registered" autocomplete="off">
+      <p class="hint">1–200 characters. Whitespace-only titles are rejected.</p>
+    </div>
+    <button class="btn btn-primary" type="submit">
+      <svg class="ic ic-16" aria-hidden="true"><use href="#i-plus"/></svg>
+      Add task
+    </button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Tasks</h2>
+    <div class="seg" role="group" aria-label="Filter tasks">
+      {% for key, label in [('all','All'),('pending','Pending'),('completed','Completed')] %}
+      <a class="seg-btn{% if status == key %} is-active{% endif %}"
+         href="{{ url_for('tasks', status=key) }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  {% if tasks %}
+  <ul class="task-list">
+    {% for t in tasks %}
+    <li class="task{% if t.completed %} is-done{% endif %}">
+      <div class="task-main">
+        <span class="task-title">{{ t.title }}</span>
+        <span class="task-meta">
+          {% if t.completed %}
+            <span class="badge badge-ok">Completed</span>
+          {% else %}
+            <span class="badge badge-warn">Pending</span>
+          {% endif %}
+          <span class="muted small">#{{ t.id }} · {{ t.created_at }}</span>
+        </span>
+      </div>
+      <div class="task-actions">
+        {% if not t.completed %}
+        <form method="post" action="{{ url_for('task_complete', task_id=t.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-sm btn-secondary" type="submit">
+            <svg class="ic ic-16" aria-hidden="true"><use href="#i-check"/></svg>
+            Complete
+          </button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('task_delete', task_id=t.id) }}"
+              data-confirm="Delete task #{{ t.id }} “{{ t.title }}”? This cannot be undone.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-sm btn-danger" type="submit">
+            <svg class="ic ic-16" aria-hidden="true"><use href="#i-trash"/></svg>
+            Delete
+          </button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">
+    <svg class="ic ic-28" aria-hidden="true"><use href="#i-check-square"/></svg>
+    <p class="empty-title">No tasks here</p>
+    <p class="muted small">
+      {% if status != 'all' %}Nothing matches the “{{ status }}” filter.
+      {% else %}Add your first task above — or create one through the MCP server and watch it appear here.{% endif %}
+    </p>
+  </div>
+  {% endif %}
+</section>
+
+{% endblock %}

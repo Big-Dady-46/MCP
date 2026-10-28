@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">MCP Learning Workspace</h1>
+    <p class="page-sub">Manage tasks and explore your MCP tools.</p>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('tasks') }}">
+    <svg class="ic ic-16" aria-hidden="true"><use href="#i-plus"/></svg>
+    New task
+  </a>
+</div>
+
+<div class="stat-grid">
+  <div class="card stat">
+    <span class="stat-label">Total tasks</span>
+    <span class="stat-value">{{ stats.total }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Completed</span>
+    <span class="stat-value text-success">{{ stats.completed }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Pending</span>
+    <span class="stat-value text-warning">{{ stats.pending }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">Registered MCP tools</span>
+    <span class="stat-value">{{ tool_count }}</span>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">MCP connection</h2>
+      {% if mcp_ok %}<span class="badge badge-ok">Server module ready</span>
+      {% else %}<span class="badge badge-err">Problem</span>{% endif %}
+    </div>
+    <p class="muted small">{{ mcp_msg }}</p>
+    <p class="muted small">
+      The MCP server is a <strong>stdio</strong> process: it starts only when a host
+      (MCP Inspector or Antigravity) launches it. The web app above runs separately.
+      Both share the same SQLite database.
+    </p>
+    <div class="btn-row">
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('tools') }}">View tools</a>
+      <a class="btn btn-secondary btn-sm" href="{{ url_for('status') }}">Server status</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">Recent task activity</h2>
+      <a class="link" href="{{ url_for('activity') }}">View all</a>
+    </div>
+    {% if activities %}
+    <ul class="feed">
+      {% for a in activities %}
+      <li>
+        <span class="badge badge-{{ 'ok' if a.result == 'success' else 'err' }}">{{ a.source }}</span>
+        <span class="feed-text">{{ a.detail }}</span>
+        <time class="feed-time">{{ a.created_at }}</time>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No activity yet. Create a task to see events here.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">How MCP works — 60 seconds</h2>
+  </div>
+  <ol class="explain">
+    <li><strong>Host</strong> — the AI application you talk to (Antigravity, MCP Inspector). It owns the chat and decides when to call a tool.</li>
+    <li><strong>Client</strong> — a small library inside the host that speaks the MCP protocol to one server.</li>
+    <li><strong>Server</strong> — this Python process (<code>mcp_server.py</code>). It advertises tools and executes them.</li>
+    <li><strong>Tool discovery</strong> — on connect the client sends <code>tools/list</code>; the SDK answers with each tool's name, description and JSON Schema (generated from the type hints).</li>
+    <li><strong>Tool execution</strong> — the model picks a tool and arguments → client sends <code>tools/call</code> → the SDK validates arguments against the schema → your Python function runs → result returns as text the model can read.</li>
+    <li><strong>Shared data</strong> — the tool writes to <code>nexusai.db</code> through <code>database.py</code>, the exact same file the web app uses. Create a task here, then refresh <em>My Tasks</em>: it's there.</li>
+  </ol>
+  <div class="callout">
+    <svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg>
+    <span>Test it yourself: run <code>{{ inspector_cmd }}</code>, open the printed URL, and call <code>add_task</code> from the Tools tab.</span>
+  </div>
+</section>
+
+{% endblock %}

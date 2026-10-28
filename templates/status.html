@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Server Status{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Server Status</h1>
+    <p class="page-sub">Real checks — nothing here is simulated.</p>
+  </div>
+</div>
+
+<div class="status-list">
+  <div class="card status-row">
+    <div class="status-head">
+      <span class="dot {{ 'dot-ok' if web_ok else 'dot-err' }}"></span>
+      <h2 class="card-title">Web application</h2>
+      <span class="badge {{ 'badge-ok' if web_ok else 'badge-err' }}">{{ 'Healthy' if web_ok else 'Down' }}</span>
+    </div>
+    <p class="muted small">Flask serving this page on <code>http://127.0.0.1:5000</code> — running now, since you are reading this.</p>
+  </div>
+
+  <div class="card status-row">
+    <div class="status-head">
+      <span class="dot {{ 'dot-ok' if db_ok else 'dot-err' }}"></span>
+      <h2 class="card-title">Database</h2>
+      <span class="badge {{ 'badge-ok' if db_ok else 'badge-err' }}">{{ 'Available' if db_ok else 'Unavailable' }}</span>
+    </div>
+    <p class="muted small">{{ db_msg }}</p>
+    <p class="muted small">Shared file: <code>{{ db_path }}</code> — used by both the web app and the MCP server.</p>
+  </div>
+
+  <div class="card status-row">
+    <div class="status-head">
+      <span class="dot {{ 'dot-ok' if mcp_ok else 'dot-err' }}"></span>
+      <h2 class="card-title">MCP server</h2>
+      <span class="badge {{ 'badge-ok' if mcp_ok else 'badge-err' }}">{{ tool_count }} tools registered</span>
+      <span class="badge badge-neutral">stdio · on demand</span>
+    </div>
+    <p class="muted small">{{ mcp_msg }}</p>
+    <p class="muted small">
+      <strong>Important distinction:</strong> the web app is a long-running HTTP process.
+      The MCP server is <em>not</em> an HTTP service you keep running — a host starts it as a
+      child process when it needs it, and stops it afterwards. Both are “up” only when their
+      own process exists; they simply share the same database file.
+    </p>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">Troubleshooting</h2></div>
+    <table class="table">
+      <tbody>
+        <tr><td><code>ModuleNotFoundError: mcp</code></td><td class="muted">Wrong interpreter. Activate <code>.venv</code> first, or use <code>.venv\Scripts\python.exe</code>.</td></tr>
+        <tr><td><code>flask: command not found</code></td><td class="muted">Dependencies missing — <code>pip install -r requirements.txt</code>.</td></tr>
+        <tr><td>Inspector won't start</td><td class="muted">Node.js missing. Install free LTS from nodejs.org, then reopen the terminal.</td></tr>
+        <tr><td>Tools not visible in Antigravity</td><td class="muted">Check <code>.agents/mcp_config.json</code> paths are absolute, then Refresh in Installed MCP Servers.</td></tr>
+        <tr><td>Port 5000 busy</td><td class="muted">Change the port in <code>app.py</code> (<code>app.run(...)</code>) and restart.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">Dependencies</h2></div>
+    {% if missing_deps %}
+      <div class="alert alert-error">Missing: {{ missing_deps|join(', ') }}</div>
+    {% else %}
+      <p class="muted small">All required Python packages are installed in the active environment.</p>
+    {% endif %}
+    <h3 class="sub-title">Manual checks</h3>
+    <pre class="code"><code>python --version
+.venv\Scripts\python.exe -c "import flask, mcp; print('deps OK')"
+.venv\Scripts\python.exe -m pytest -q</code></pre>
+    <h3 class="sub-title">Start MCP Inspector</h3>
+    <pre class="code"><code>{{ inspector_cmd }}</code></pre>
+  </section>
+</div>
+
+{% endblock %}

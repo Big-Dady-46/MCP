@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Settings</h1>
+    <p class="page-sub">Read-only project information — this learning app has no fake preferences.</p>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">Application</h2></div>
+    <dl class="kv">
+      <dt>Name</dt><dd>{{ info.app_name }}</dd>
+      <dt>Subtitle</dt><dd>{{ info.subtitle }}</dd>
+      <dt>Listening on</dt><dd><code>http://{{ info.host }}:{{ info.port }}</code> (localhost only)</dd>
+      <dt>Database</dt><dd><code>{{ info.db_path }}</code></dd>
+      <dt>Database status</dt><dd>SQLite file shared with the MCP server</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">Runtime</h2></div>
+    <dl class="kv">
+      <dt>Python</dt><dd>{{ info.python }}</dd>
+      <dt>Interpreter</dt><dd><code>{{ info.executable }}</code></dd>
+      <dt>Flask</dt><dd>{{ info.flask }}</dd>
+      <dt>MCP SDK</dt><dd>{{ info.mcp_sdk }}</dd>
+      <dt>Platform</dt><dd>{{ info.platform }}</dd>
+      <dt>Virtual env</dt><dd><code>{{ info.venv }}</code></dd>
+    </dl>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Project setup (from scratch)</h2></div>
+  <pre class="code"><code># 1. Python version
+python --version
+
+# 2. Virtual environment
+python -m venv .venv
+
+# 3. Activate it
+.\.venv\Scripts\Activate.ps1
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Start the web app  ->  http://127.0.0.1:5000
+python app.py
+
+# 6. Run the tests
+python -m pytest -q</code></pre>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Connect Antigravity (MCP host)</h2></div>
+  <p class="muted small">
+    Create <code>.agents\mcp_config.json</code> in this project folder (workspace scope), or edit the
+    global <code>%USERPROFILE%\.gemini\config\mcp_config.json</code>. Use the full README section
+    “Antigravity MCP Connection” — it generates the exact absolute paths for this machine.
+  </p>
+  <pre class="code"><code>{
+  "mcpServers": {
+    "nexusai": {
+      "command": "&lt;ABSOLUTE&gt;\\.venv\\Scripts\\python.exe",
+      "args": ["&lt;ABSOLUTE&gt;\\mcp_server.py"],
+      "cwd": "&lt;ABSOLUTE&gt;"
+    }
+  }
+}</code></pre>
+  <p class="muted small">Restart/refresh the MCP connection afterwards; no API keys are required.</p>
+</section>
+
+{% endblock %}

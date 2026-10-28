@@ -1,0 +1,21 @@
+# Deploy hygiene: keep secrets, local data, venv and test/audit artifacts out
+# of the Vercel bundle (also configured via excludeFiles in vercel.json).
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+tests/
+.agents/
+.opencode/
+notes_server/
+*_OUTPUT.txt
+acceptance_audit.py
+client_integration_check.py
+verify.py
+.vercel/
+node_modules/

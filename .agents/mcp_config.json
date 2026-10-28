@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "nexusai": {
+      "command": "C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\mcp_server.py"],
+      "cwd": "C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP"
+    },
+    "nexusai-notes": {
+      "command": "C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\notes_server\\notes_server.py"],
+      "cwd": "C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\notes_server"
+    },
+    "nexusai-store": {
+      "command": "C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\store_server.py"],
+      "cwd": "C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP"
+    }
+  }
+}

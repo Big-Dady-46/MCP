@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Workers{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1 class="page-title">Workers</h1><p class="page-sub">Roles, attendance & salaries (no CNIC/bank stored)</p></div>
+</div>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Add worker</h2></div>
+  <form method="post" action="{{ url_for('store.workers') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="form" value="worker">
+    <div class="grid-2">
+      <div class="field"><label>Name *</label><input name="name" type="text" maxlength="120" required></div>
+      <div class="field"><label>Role</label><input name="role" type="text" maxlength="60" placeholder="e.g. Shopkeeper"></div>
+      <div class="field"><label>Phone</label><input name="phone" type="text" maxlength="30"></div>
+      <div class="field"><label>Salary (PKR)</label><input name="salary" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label>Frequency</label><select name="salary_frequency"><option value="monthly">monthly</option><option value="weekly">weekly</option><option value="daily">daily</option></select></div>
+    </div>
+    <button class="btn btn-primary" type="submit">Add worker</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Mark attendance</h2></div>
+  <form method="post" action="{{ url_for('store.workers') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="form" value="attendance">
+    <div class="grid-2">
+      <div class="field"><label>Worker</label><select name="worker_id">{% for w in workers if w.is_active %}<option value="{{ w.id }}">{{ w.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Day</label><input name="day" type="date" value="{{ today }}"></div>
+      <div class="field"><label>Status</label><select name="status"><option value="present">present</option><option value="absent">absent</option><option value="leave">leave</option></select></div>
+    </div>
+    <button class="btn btn-secondary" type="submit">Save attendance</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Pay salary</h2></div>
+  <form method="post" action="{{ url_for('store.workers') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="form" value="salary">
+    <div class="grid-2">
+      <div class="field"><label>Worker</label><select name="worker_id">{% for w in workers if w.is_active %}<option value="{{ w.id }}">{{ w.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Amount (PKR) *</label><input name="amount" type="number" min="0.01" step="0.01" required></div>
+      <div class="field"><label>Note</label><input name="note" type="text" maxlength="200"></div>
+    </div>
+    <button class="btn btn-secondary" type="submit">Record payment</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Workers</h2></div>
+  {% if workers %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>#</th><th>Name</th><th>Role</th><th>Salary</th><th>This month paid</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for w in workers %}
+      {% set st = statuses.get(w.id) %}
+      <tr><td>{{ w.id }}</td><td>{{ w.name }}</td><td>{{ w.role or '—' }}</td>
+      <td>PKR {{ "%.2f"|format(w.salary) }}/{{ w.salary_frequency[0] }}</td>
+      <td>{% if st %}PKR {{ "%.2f"|format(st.paid) }} / {{ "%.2f"|format(st.expected) }}{% else %}—{% endif %}</td>
+      <td>{% if not w.is_active %}<span class="badge badge-neutral">Inactive</span>{% elif st and st.paid >= st.expected and st.expected > 0 %}<span class="badge badge-ok">Paid</span>{% elif st and st.paid > 0 %}<span class="badge badge-warn">Partial</span>{% else %}<span class="badge badge-err">Unpaid</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<div class="empty"><p class="empty-title">No workers yet</p></div>{% endif %}
+</section>
+{% endblock %}

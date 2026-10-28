@@ -1,0 +1,95 @@
+Run: client_integration_check.py
+Date: 2026-10-28 15:55:32
+Exit code: 0
+============================================================
+python.exe : [10/28/26 15:55:46] INFO     Tool 'create_purchase' failed:       server.py:453
+At line:6 char:6
++ $o = & $py client_integration_check.py 2>&1 | Out-String; $ec = $LAST ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([10/28/26 15:55...  server.py:453:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+                             "Error executing tool                             
+                             create_purchase: Status 'paid'                    
+                             requires the full amount paid."                   
+                    INFO     Tool 'create_sale' failed: 'Error    server.py:453
+                             executing tool create_sale:                       
+                             Insufficient stock for product id                 
+                             1.'                                               
+                    INFO     Tool 'add_product' rejected          server.py:450
+                             arguments: ['name']                               
+                    INFO     Tool 'add_product' rejected          server.py:450
+                             arguments: ['sell_price']                         
+                    INFO     Tool 'adjust_stock' failed: "Error   server.py:453
+                             executing tool adjust_stock:                      
+                             Insufficient stock for '[TEST] MCP                
+                             Integration Soda': available 18,                  
+                             requested change -500."                           
+                    INFO     Tool 'update_product' failed: 'Error server.py:453
+                             executing tool update_product: Set                
+                             confirm=true to apply product                     
+                             changes.'                                         
+[10/28/26 15:55:54] INFO     127.0.0.1 - - [28/Oct/2026         _internal.py:97
+                             15:55:54] "GET /store/ HTTP/1.1"                  
+                             200 -                                             
+                    INFO     127.0.0.1 - - [28/Oct/2026         _internal.py:97
+                             15:55:54] "GET / HTTP/1.1" 200 -                  
+                    INFO     127.0.0.1 - - [28/Oct/2026         _internal.py:97
+                             15:55:54] "GET /store/products                    
+                             HTTP/1.1" 200 -                                   
+MCP client integration check ù temp DBs: C:\Users\ABDUL-~1\AppData\Local\Temp\nexus_mcp_client_nv85ujlw
+=== PART 1 ù .agents/mcp_config.json validation ===
+PASS  cfg1. strict UTF-8 JSON, no BOM
+PASS  cfg2. parses as strict JSON
+PASS  cfg3. exactly 3 servers (nexusai, nexusai-notes, nexusai-store)
+PASS  cfg4-nexusai. command is absolute path and exists ù C:\Users\Abdul-Hannan\Desktop\Projects\MCP\.venv\Scripts\python.exe
+PASS  cfg5-nexusai. all args are absolute and exist ù ['C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\mcp_server.py']
+PASS  cfg6-nexusai. cwd is absolute and exists ù C:\Users\Abdul-Hannan\Desktop\Projects\MCP
+PASS  cfg7-nexusai. arg script lives under cwd (relative layout sane)
+PASS  cfg4-nexusai-notes. command is absolute path and exists ù C:\Users\Abdul-Hannan\Desktop\Projects\MCP\.venv\Scripts\python.exe
+PASS  cfg5-nexusai-notes. all args are absolute and exist ù ['C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\notes_server\\notes_server.py']
+PASS  cfg6-nexusai-notes. cwd is absolute and exists ù C:\Users\Abdul-Hannan\Desktop\Projects\MCP\notes_server
+PASS  cfg7-nexusai-notes. arg script lives under cwd (relative layout sane)
+PASS  cfg4-nexusai-store. command is absolute path and exists ù C:\Users\Abdul-Hannan\Desktop\Projects\MCP\.venv\Scripts\python.exe
+PASS  cfg5-nexusai-store. all args are absolute and exist ù ['C:\\Users\\Abdul-Hannan\\Desktop\\Projects\\MCP\\store_server.py']
+PASS  cfg6-nexusai-store. cwd is absolute and exists ù C:\Users\Abdul-Hannan\Desktop\Projects\MCP
+PASS  cfg7-nexusai-store. arg script lives under cwd (relative layout sane)
+PASS  cfg8. no secrets/keys in config
+
+=== PART 2 ù store server: EXACT config command over real stdio ===
+launch: C:\Users\Abdul-Hannan\Desktop\Projects\MCP\.venv\Scripts\python.exe C:\Users\Abdul-Hannan\Desktop\Projects\MCP\store_server.py (cwd=C:\Users\Abdul-Hannan\Desktop\Projects\MCP)
+PASS  mcp1. initialize handshake + tool discovery over stdio (25 tools) ù 25 tools
+PASS  mcp2. resource discovery (4 URIs) ù ['nexus://store/summary', 'nexus://inventory/low-stock', 'nexus://sales/today', 'nexus://staff/summary']
+PASS  mcp3. prompt discovery (2 prompts) ù ['business_report_prompt', 'stock_review']
+PASS  mcp4. tool annotations classify read-only vs write
+PASS  mcp5. add test product via stdio
+PASS  mcp6. read back product (name/price/stock match)
+PASS  mcp7. update details via stdio (price 150->160, reorder 4)
+PASS  mcp8. purchase received: total 12*95=1140, stock 10->22 ù stock=22
+PASS  mcp9. invalid purchase rejected; stock unchanged (22)
+PASS  mcp10. sale total 4*160-20=620; stock 22->18; receipt issued ù total=620.0 stock=18
+PASS  mcp11. oversell/invalid args all rejected (isError)
+PASS  mcp12. DB state unchanged after all rejections ù (1, 1, 1, 0, 0) == (1, 1, 1, 0, 0)
+PASS  mcp13. store summary resources readable with live data
+PASS  mcp14. prompts invoked; read-only instructions present
+PASS  mcp15. resource+prompt reads mutate NOTHING ù (1, 1, 1, 0, 0) == (1, 1, 1, 0, 0)
+PASS  mcp16. reversible cleanup: test product deactivated (not deleted)
+PASS  mcp17. baseline products still present alongside test row
+
+=== PART 3 ù tasks + notes servers: EXACT config command over stdio ===
+PASS  mcp18. tasks server stdio: init + 4 tools discovered ù ['add_task', 'complete_task', 'delete_task', 'list_tasks']
+PASS  mcp19. tasks add/list/delete works over stdio (reversible)
+PASS  mcp20. tasks resource+prompt discovered
+PASS  mcp21. notes server stdio: init + 3 tools discovered ù ['add_note', 'list_notes', 'search_notes']
+PASS  mcp22. notes add/search works over stdio
+PASS  mcp23. notes resource+prompt discovered
+PASS  mcp24. three servers used three independent DB files
+
+=== PART 4 ù Flask dashboard on 127.0.0.1 (real HTTP) ===
+PASS  flask1. server binds 127.0.0.1 only (no 0.0.0.0/public)
+PASS  flask2. dashboard serves real HTTP on 127.0.0.1 (/store/ 200)
+PASS  flask3. overview page serves too
+PASS  flask4. products page serves
+PASS  final1. REAL store/task/notes DBs byte-identical after integration run
+============================================================
+45/45 integration checks PASSED

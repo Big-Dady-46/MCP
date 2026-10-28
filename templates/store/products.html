@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Products & Inventory</h1>
+    <p class="page-sub">Stock in bottles · prices in PKR</p>
+  </div>
+</div>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Add product</h2></div>
+  <form method="post" action="{{ url_for('store.products') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="grid-2">
+      <div class="field"><label for="name">Name *</label><input id="name" name="name" type="text" maxlength="120" required placeholder="e.g. Coca-Cola"></div>
+      <div class="field"><label for="brand">Brand</label><input id="brand" name="brand" type="text" maxlength="80" placeholder="e.g. Coca-Cola"></div>
+      <div class="field"><label for="size_label">Size</label><input id="size_label" name="size_label" type="text" maxlength="40" placeholder="e.g. 500ml"></div>
+      <div class="field"><label for="unit">Unit</label>
+        <select id="unit" name="unit"><option value="bottle">bottle</option><option value="crate">crate</option><option value="carton">carton</option></select>
+      </div>
+      <div class="field"><label for="units_per_crate">Units per crate</label><input id="units_per_crate" name="units_per_crate" type="number" min="1" value="12"></div>
+      <div class="field"><label for="unit_cost">Cost / bottle (PKR) *</label><input id="unit_cost" name="unit_cost" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label for="sell_price">Sell / bottle (PKR) *</label><input id="sell_price" name="sell_price" type="number" min="0.01" step="0.01" required></div>
+      <div class="field"><label for="stock_units">Opening stock (bottles)</label><input id="stock_units" name="stock_units" type="number" min="0" value="0"></div>
+      <div class="field"><label for="reorder_level">Reorder level (bottles)</label><input id="reorder_level" name="reorder_level" type="number" min="0" value="0"></div>
+      <div class="field"><label for="supplier_id">Supplier</label>
+        <select id="supplier_id" name="supplier_id"><option value="0">— none —</option>
+          {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Add product</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2 class="card-title">Inventory</h2></div>
+  {% if products %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>#</th><th>Name</th><th>Brand</th><th>Stock</th><th>Cost</th><th>Price</th><th>Status</th><th>Adjust stock</th><th></th></tr></thead>
+      <tbody>
+      {% for p in products %}
+        <tr>
+          <td>{{ p.id }}</td>
+          <td>{{ p.name }} <span class="muted small">{{ p.size_label }}</span></td>
+          <td>{{ p.brand or '—' }}</td>
+          <td>{{ p.stock_units }} btl</td>
+          <td>PKR {{ "%.2f"|format(p.unit_cost) }}</td>
+          <td>PKR {{ "%.2f"|format(p.sell_price) }}</td>
+          <td>{% if not p.is_active %}<span class="badge badge-neutral">Inactive</span>{% elif p.stock_units <= p.reorder_level %}<span class="badge badge-warn">Low</span>{% else %}<span class="badge badge-ok">OK</span>{% endif %}</td>
+          <td>
+            <form method="post" action="{{ url_for('store.adjust', pid=p.id) }}" class="task-meta">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input name="change_units" type="number" style="width:5.5rem" placeholder="+/-" required>
+              <button class="btn btn-sm btn-secondary" type="submit">Set</button>
+            </form>
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('store.toggle', pid=p.id) }}"
+                  data-confirm="{% if p.is_active %}Deactivate{% else %}Activate{% endif %} “{{ p.name }}”?">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-sm {% if p.is_active %}btn-danger{% else %}btn-secondary{% endif %}" type="submit">
+                {% if p.is_active %}Deactivate{% else %}Activate{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="empty-title">No products yet</p><p class="muted small">Add one above or seed demo data.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

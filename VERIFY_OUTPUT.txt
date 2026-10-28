@@ -1,0 +1,198 @@
+Run: .venv\Scripts\python.exe verify.py
+Date: 2026-10-27 16:36
+Exit code: 0
+Note: Turso spike BLOCKED (driver not installable on py3.14/win); no code changes made.
+
+[10/27/26 16:36:23] INFO     Tool 'complete_task' failed: 'Error  server.py:453
+                             executing tool complete_task: No                  
+                             task found with id 999999.'                       
+[10/27/26 16:36:23] INFO     Tool 'search_notes' failed: 'Error   server.py:453
+                             executing tool search_notes: Search               
+                             query is required and must be text.'              
+                    ERROR    modern request handler raised        runner.py:547
+                             +- Traceback (most recent call las-+              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\mcpserver\server.p |              
+                             | y:1359 in get_prompt             |              
+                             |                                  |              
+                             |   1356             if not prompt |              
+                             |   1357                 raise Val |              
+                             |   1358                           |              
+                             | > 1359             rendered = aw |              
+                             |   1360             if isinstance |              
+                             |   1361                 return re |              
+                             |   1362                           |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\mcpserver\prompts\ |              
+                             | base.py:177 in render            |              
+                             |                                  |              
+                             |   174             provided = set |              
+                             |   175             missing = requ |              
+                             |   176             if missing:    |              
+                             | > 177                 raise Valu |              
+                             |   178                            |              
+                             |   179         try:               |              
+                             |   180             # Add context  |              
+                             +----------------------------------+              
+                             ValueError: Missing required                      
+                             arguments: {'query'}                              
+                                                                               
+                             The above exception was the direct                
+                             cause of the following exception:                 
+                                                                               
+                             +- Traceback (most recent call las-+              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\runner.py:785 in   |              
+                             | on_request                       |              
+                             |                                  |              
+                             |   782             route.protocol |              
+                             |       outbound=outbound          |              
+                             |   783         )                  |              
+                             |   784         try:               |              
+                             | > 785             return await s |              
+                             |   786                 server,    |              
+                             |   787                 _NoServerR |              
+                             |   788                 method,    |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\runner.py:836 in   |              
+                             | serve_one                        |              
+                             |                                  |              
+                             |   833     """                    |              
+                             |   834     runner = ServerRunner( |              
+                             |   835     try:                   |              
+                             | > 836         return await runne |              
+                             |   837     finally:               |              
+                             |   838         await aclose_shiel |              
+                             |   839                            |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\runner.py:230 in   |              
+                             | _on_request                      |              
+                             |                                  |              
+                             |   227         # without `call_ne |              
+                             |   228         # including its re |              
+                             |   229         # the fact.        |              
+                             | > 230         result = _dump_res |              
+                             |   231         if method == "init |              
+                             |   232             # Commit only  |              
+                             |   233             # Race-free: t |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\_otel.py:44 in     |              
+                             | __call__                         |              
+                             |                                  |              
+                             |   41             set_status_on_e |              
+                             |   42         ) as span:          |              
+                             |   43             try:            |              
+                             | > 44                 result = aw |              
+                             |   45             except MCPError |              
+                             |   46                 code = str( |              
+                             |   47                 span.set_at |              
+                             |      code})                      |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\request_state.py:3 |              
+                             | 61 in __call__                   |              
+                             |                                  |              
+                             |   358             # An explicit  |              
+                             |       any client's power.        |              
+                             |   359             plaintext, bin |              
+                             |   360             ctx = replace( |              
+                             | > 361         result = await cal |              
+                             |   362         return self._seal_ |              
+                             |   363                            |              
+                             |   364     def _unseal(self, ctx: |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\runner.py:217 in   |              
+                             | _inner                           |              
+                             |                                  |              
+                             |   214             # Absent param |              
+                             |   215             # the handler  |              
+                             |   216             typed_params = |              
+                             |       params, by_name=False)     |              
+                             | > 217             result = await |              
+                             |   218             if isinstance( |              
+                             |   219                 # Raise in |              
+                             |   220                 raise MCPE |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\mcpserver\server.p |              
+                             | y:514 in _handle_get_prompt      |              
+                             |                                  |              
+                             |    511         self, ctx: Server |              
+                             |    512     ) -> GetPromptResult  |              
+                             |    513         context = Context |              
+                             |        subscriptions=self._subsc |              
+                             | >  514         return await self |              
+                             |    515                           |              
+                             |    516     async def list_tools( |              
+                             |    517         """List all avail |              
+                             |                                  |              
+                             | C:\Users\Abdul-Hannan\Desktop\Pr |              
+                             | ojects\MCP\.venv\Lib\site-packag |              
+                             | es\mcp\server\mcpserver\server.p |              
+                             | y:1371 in get_prompt             |              
+                             |                                  |              
+                             |   1368             raise         |              
+                             |   1369         except Exception  |              
+                             |   1370             # Not logged  |              
+                             | > 1371             raise ValueEr |              
+                             |   1372                           |              
+                             |   1373                           |              
+                             |   1374 def _version_gated(method |              
+                             +----------------------------------+              
+                             ValueError: Missing required                      
+                             arguments: {'query'}                              
+[10/27/26 16:36:26] INFO     Tool 'adjust_stock' failed: "Error   server.py:453
+                             executing tool adjust_stock:                      
+                             Insufficient stock for '[VERIFY]                  
+                             Temp Cola': available 30, requested               
+                             change -999999."                                  
+PASS  7 tools discovered � ['add_task', 'complete_task', 'delete_task', 'list_tasks'] | ['add_note', 'list_notes', 'search_notes']
+PASS  add_task works
+PASS  add_note works
+PASS  list_tasks works
+PASS  list_notes works
+PASS  search_notes works
+PASS  resource URIs listed
+PASS  task resource = real data
+PASS  notes resource = real data
+PASS  prompts listed
+PASS  task prompt renders
+PASS  notes prompt renders
+PASS  invalid tool args -> isError
+PASS  missing prompt arg -> protocol error
+PASS  resources/prompts do not mutate rows
+PASS  databases independent
+PASS  cleanup temp task
+PASS  cleanup temp note
+PASS  store: 25 tools discovered � got 25
+PASS  store: 4 resources listed � ['nexus://store/summary', 'nexus://inventory/low-stock', 'nexus://sales/today', 'nexus://staff/summary']
+PASS  store: 2 prompts listed � ['business_report_prompt', 'stock_review']
+PASS  store: add_product works
+PASS  store: create_sale works
+PASS  store: money math exact (COGS/profit) � total=300.0 cogs=200.0 profit=100.0
+PASS  store: create_purchase works
+PASS  store: add_worker works
+PASS  store: record_expense works
+PASS  store: dashboard has real keys
+PASS  store: invalid stock change -> isError
+PASS  store: resources/prompts do not mutate sales
+PASS  store: task/notes DBs not opened by store server
+PASS  store: cleanup temp rows
+PASS  both database files still exist
+PASS  store.db still exists
+-------------------------------------------------------
+34/34 checks PASSED

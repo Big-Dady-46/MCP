@@ -1,0 +1,105 @@
+Run: acceptance_audit.py
+Date: 2026-10-28 15:55:32
+Exit code: 0
+============================================================
+python.exe : [10/28/26 15:55:38] INFO     Tool 'adjust_stock' failed: 'Error   server.py:453
+At line:2 char:6
++ $o = & $py acceptance_audit.py 2>&1 | Out-String; $ec = $LASTEXITCODE
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([10/28/26 15:55...  server.py:453:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+                             executing tool adjust_stock: Set                  
+                             confirm=true to apply a stock                     
+                             adjustment.'                                      
+                    INFO     Tool 'create_sale' failed: 'Error    server.py:453
+                             executing tool create_sale: items                 
+                             must be a JSON array string, e.g.                 
+                             [{"product_id":1,"qty":2,"unit":"bot              
+                             tle"}].'                                          
+                    INFO     Tool 'get_product' failed: 'Error    server.py:453
+                             executing tool get_product: No                    
+                             product found with id 999999.'                    
+                    INFO     Tool 'reset_demo_data' failed:       server.py:453
+                             'Error executing tool                             
+                             reset_demo_data: Set confirm=true.                
+                             This permanently deletes demo rows                
+                             only.'                                            
+                    INFO     Tool 'add_product' rejected          server.py:450
+                             arguments: ['name']                               
+Acceptance audit ù isolated temp DBs at: C:\Users\ABDUL-~1\AppData\Local\Temp\nexus_audit_kvtivugh
+Real DB hashes before: {'store.db': '34a47a09338c', 'nexusai.db': '4d4f0f8db61f', 'notes.db': '8222095856b7'}
+
+=== PART A ù store_db workflows (isolated temp store.db) ===
+PASS  1. product persists after reopening DB ù row=('Audit Cola', 20, 10000, 15000)
+PASS  2a. received purchase increases stock 20->44 ù 20->44
+PASS  2b. purchase total = 24*90 = 2160, paid full, status paid
+PASS  2c. invalid purchase rejected AND stock unchanged (rollback) ù stock=44
+PASS  3a. sale totals: 2 x 150 = 300 ù R20261028-0001
+PASS  3b. stock deducted 44 -> 42 ù 42
+PASS  3c. transaction records exist (1 sale, 1 item, 1 stock movement) ù items=1 moves=1
+PASS  4. oversell rejected + full rollback (no sale/item/movement rows, stock same)
+PASS  5. 2 crates x 12 = 24 bottles deducted; total = 24*100 = 2400
+PASS  6a. discount math: 600 - 50 = 550
+PASS  6b. COGS captured at sale time: 3*120 = 360
+PASS  6c. P&L: gross = revenue - COGS; net = gross - expenses (paisa-exact) ù rev=3250.0 cogs=2000.0 exp=1000.0
+PASS  6d. purchases NOT counted as expenses
+PASS  6e. stock valuation = sum(units*cost) and retail
+PASS  7a. worker created with salary 30000
+PASS  7b. attendance upserts to ONE row and updates status
+PASS  7c. salary payment recorded; status: paid 12000, outstanding 18000
+PASS  8a. demo seed works then is idempotent (second call no-op)
+PASS  8b. reset without confirm refused
+PASS  8c. reset removes demo rows only; genuine products survive ù deleted=6
+PASS  8d. INFO real-sale-of-demo-product edge case handled safely ù FK constraint blocked reset (real sale history preserved ù safe failure)
+PASS  8e. store clean of demo data after final reset
+
+=== PART B ù store MCP server over real stdio ===
+PASS  9a. 25 tools discovered over stdio ù got 25
+PASS  9b. add_product valid args works
+PASS  9c. create_sale over stdio: total 360, stock 15->12
+PASS  9d. get_dashboard_summary returns live keys
+PASS  9e. invalid args -> isError (no-confirm, bad JSON, missing id, reset no-confirm, blank name)
+PASS  9f. 4 resource URIs listed
+PASS  10a. resources return valid JSON of live data
+PASS  10b. resource reads mutate NOTHING (row counts identical) ù (4, 4, 1) == (4, 4, 1)
+PASS  10c. 2 prompts listed
+PASS  10d. prompts render documented read-only instructions
+PASS  10e. prompt renders mutate NOTHING
+PASS  10f. invalid prompt arg -> protocol error
+PASS  9g. price update does NOT reactivate a deactivated product ù active after price update on inactive product = False
+
+=== PART C ù Flask dashboard workflows ===
+PASS  11a. dashboard 200 and shows live section
+PASS  11b. all store pages 200 (products/sales/purchases/workers/expenses/reports/demo)
+PASS  11c. CSRF token present in forms
+PASS  11d. POST without CSRF token rejected; NO row created ù status=302
+PASS  11e. POST with invalid CSRF token rejected
+PASS  11f. negative sell_price rejected with error flash
+PASS  11g. web product created, visible after redirect, persists in fresh DB read
+PASS  11h. web POS sale: 4*120-10 = 470, stock 10->6, receipt page shown
+PASS  11i. web negative-stock adjust rejected; stock unchanged
+PASS  11j. web toggle deactivates and persists
+PASS  11k. web worker created
+PASS  11l. web expense recorded and reports page renders P&L from live data
+PASS  11m. web demo seed works; reset needs checkbox; then removes demo only
+
+=== PART D ù existing task/notes functionality + independence ===
+PASS  12a. task create/complete/list still works
+PASS  12b. note create/search still works
+PASS  12c. three databases independent (no cross tables)
+
+=== PART E ù security scan ===
+PASS  13a. no eval/exec/os.system/shell=True in project sources
+PASS  13b. no hardcoded secrets/credentials in sources
+PASS  13c. no f-string SQL with user data (only hardcoded identifiers)
+PASS  13d. parameterized queries present throughout (hundreds of ? placeholders) ù count=251
+PASS  13e. Flask binds 127.0.0.1 only (no public exposure)
+PASS  13f. destructive reset tool hard-requires confirm=true
+PASS  13g. demo reset deletes ONLY is_demo=1 rows (no blanket DELETE)
+PASS  13h. .gitignore excludes nexusai.db, notes.db, store.db (+wal/shm)
+PASS  13i. host config has all three servers, no secrets
+PASS  13j. host config is strict UTF-8 JSON (no BOM)
+PASS  14. REAL databases (store/task/notes) byte-identical after audit
+============================================================
+62/62 audit checks PASSED
