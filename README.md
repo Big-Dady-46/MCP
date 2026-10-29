@@ -168,9 +168,63 @@ vercel deploy --prod
 ```
 
 **Hobby plan is free** for non-commercial use (limits: 300s function timeout, pauses after
-inactivity). The MCP servers remain **stdio-only on your machine** — Vercel's HTTP functions
-cannot host stdio MCP servers, and no remote MCP gateway is enabled (by design, until
-authenticated remote access is properly implemented).
+inactivity). The stdio MCP servers stay **stdio-only on your machine**; the web dashboard
+plus the Phase 2 remote gateway below are what run on Vercel.
+
+---
+
+## Phase 2: Remote MCP Gateway — control it from ANY AI (ChatGPT, etc.)
+
+`mcp_gateway.py` exposes the store over **MCP Streamable HTTP** with real authentication,
+so any AI host that supports remote MCP can use it (read-only demo mode).
+
+**MCP endpoint (after deploy):** `https://<your-project>.vercel.app/mcp_gateway`
+(aliased at `/mcp` via rewrite)
+
+**Authentication — dual (both tested locally over real HTTP):**
+
+1. **Static bearer** (for curl / scripts / OpenAI Agents API / OpenCode-over-HTTP):
+   header `Authorization: Bearer <MCP_GATEWAY_TOKEN>`
+2. **OAuth 2.1 (PKCE S256 + dynamic client registration)** — what **ChatGPT** uses
+   (ChatGPT does *not* support static custom auth headers; only OAuth or no-auth).
+   Login user = `MCP_GATEWAY_USER` (default `admin`), password = your
+   `MCP_GATEWAY_TOKEN`. Discovery is served on the reserved
+   `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource`
+   paths by the main Flask app (Vercel cannot rewrite `/.well-known`).
+
+**Tool surface: READ-ONLY (13 of 25 store tools).** No sales/purchases/stock edits:
+on Vercel the database lives in `/tmp` (ephemeral, re-seeded with `[DEMO]` data on every
+cold start, `persistent: false` in `/healthz`) — write access would create false
+confidence. **Real data stays local** on your PC, reachable only via the stdio servers.
+
+**Required environment variables (Vercel):**
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `NEXUSAI_SECRET` | yes | Flask sessions/CSRF (dashboard) |
+| `MCP_GATEWAY_TOKEN` | yes | bearer + OAuth login password (long random!) |
+| `MCP_GATEWAY_USER` | no | OAuth login username (default `admin`) |
+| `GATEWAY_MODE` | no | must be `readonly-demo` (default); other values = fail-closed |
+
+**Local test:** `python gateway_integration_check.py` → 51 checks (real uvicorn +
+official MCP client, bearer + full OAuth flow, secret-leak scan, real-DB hash guard).
+
+**ChatGPT setup (after deploying):**
+1. Deploy + set the env vars (section above), confirm
+   `https://<proj>.vercel.app/healthz` (dashboard) and
+   `https://<proj>.vercel.app/mcp_gateway` → `401` (gateway alive).
+2. Verify discovery: open `https://<proj>.vercel.app/.well-known/oauth-authorization-server`
+   (JSON) — if it 404s, stop and report it (routing blocker).
+3. In ChatGPT: **Plugins → Add custom MCP server** →
+   URL: `https://<proj>.vercel.app/mcp_gateway` → Authentication: **OAuth** →
+   Create → install → when the login form appears use username `admin`
+   (or `MCP_GATEWAY_USER`) and password = your `MCP_GATEWAY_TOKEN`.
+4. Test in chat: *"Using the NexusAI app, list low-stock products"* — only then is the
+   connection verified.
+
+**Known limitations (honest):** stateless HMAC auth codes are valid ≤60s (PKCE-protected);
+OAuth access tokens last 24h (refresh tokens 30d); database is ephemeral demo data;
+live ChatGPT GUI verification requires YOUR ChatGPT account.
 
 ---
 

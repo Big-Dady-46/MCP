@@ -3,12 +3,24 @@
   "framework": "flask",
   "functions": {
     "app.py": {
-      "excludeFiles": "{.venv/**,venv/**,tests/**,.agents/**,**/*.db,**/*.db-wal,**/*.db-shm,*_OUTPUT.txt,acceptance_audit.py,client_integration_check.py,verify.py,notes_server/**,.opencode/**}"
+      "excludeFiles": "{.venv/**,venv/**,tests/**,.agents/**,**/*.db,**/*.db-wal,**/*.db-shm,*_OUTPUT.txt,acceptance_audit.py,client_integration_check.py,gateway_integration_check.py,verify.py,notes_server/**,.opencode/**}"
+    },
+    "mcp_gateway.py": {
+      "excludeFiles": "{.venv/**,venv/**,tests/**,.agents/**,templates/**,static/**,**/*.db,**/*.db-wal,**/*.db-shm,*_OUTPUT.txt,acceptance_audit.py,client_integration_check.py,gateway_integration_check.py,verify.py,notes_server/**,.opencode/**}"
     }
   },
+  "rewrites": [
+    { "source": "/mcp", "destination": "/mcp_gateway" }
+  ],
   "headers": [
     {
       "source": "/healthz",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/mcp_gateway",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" }
       ]

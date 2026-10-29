@@ -24,6 +24,7 @@ from flask import (
 
 import database as db
 import mcp_server
+import oauth_meta
 import store_routes
 
 APP_NAME = "NexusAI"
@@ -138,6 +139,29 @@ def healthz():
         jsonify({"status": "ok" if healthy else "degraded", "checks": checks}),
         200 if healthy else 503,
     )
+
+
+# ---------------------------------------------------------------------------
+# OAuth discovery for the remote MCP gateway
+#
+# On Vercel, /.well-known/* is a RESERVED path: it cannot be rewritten to
+# another function, so the main app must serve these two documents. The
+# actual authorize/token/register endpoints live in mcp_gateway.py under
+# /mcp_gateway/*. Metadata builders are shared (oauth_meta.py) so the two
+# sources can never drift (enforced by tests/test_gateway.py).
+# ---------------------------------------------------------------------------
+
+@app.route("/.well-known/oauth-protected-resource")
+@app.route("/.well-known/oauth-protected-resource/<path:resource_path>")
+def well_known_protected_resource(resource_path=None):
+    return jsonify(oauth_meta.protected_resource_metadata(
+        oauth_meta.normalize_origin(request.url_root)))
+
+
+@app.route("/.well-known/oauth-authorization-server")
+def well_known_authorization_server():
+    return jsonify(oauth_meta.authorization_server_metadata(
+        oauth_meta.normalize_origin(request.url_root)))
 
 
 # ---------------------------------------------------------------------------

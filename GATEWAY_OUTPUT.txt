@@ -1,0 +1,158 @@
+Run: gateway_integration_check.py (Phase 2)
+Date: 2026-10-29 15:31:33
+Exit code: 0
+============================================================
+python.exe : [10/29/26 15:31:49] INFO     HTTP Request: POST                 _client.py:1923
+At line:2 char:6
++ $o = & $py gateway_integration_check.py 2>&1 | Out-String; $ec = $LAS ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([10/29/26 15:31..._client.py:1923:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 202 Accepted"                           
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+[10/29/26 15:31:50] INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+                    INFO     HTTP Request: GET                  _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             as "HTTP/1.1 200 OK"                              
+                    INFO     HTTP Request: GET                  _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             pr "HTTP/1.1 200 OK"                              
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             register "HTTP/1.1 201 Created"                   
+                    INFO     HTTP Request: GET                  _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             authorize?response_type=code&clien                
+                             t_id=ng1.eyJleHAiOjIxMDg2Mjk5MTAsI                
+                             mlhdCI6MTc5MzI2OTkxMCwicmVkaXJlY3R                
+                             fdXJpcyI6WyJodHRwczovL2NoYXRncHQuY                
+                             29tL2NiIl0sInR5cCI6ImNsaWVudCJ9.Li                
+                             9rtT0K1tzFS2jhP-UVSU8imrwEfjM8O46m                
+                             9XR54cQ&redirect_uri=https%3A%2F%2                
+                             Fchatgpt.com%2Fcb&code_challenge=P                
+                             rPXORqh7rvpGBsU9Owx5z6yd3_ZEF0dmvt                
+                             55o19Dos&code_challenge_method=S25                
+                             6&state=integration "HTTP/1.1 200                 
+                             OK"                                               
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             authorize "HTTP/1.1 401                           
+                             Unauthorized"                                     
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             authorize "HTTP/1.1 302 Found"                    
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             token "HTTP/1.1 400 Bad Request"                  
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             token "HTTP/1.1 200 OK"                           
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway/                
+                             token "HTTP/1.1 200 OK"                           
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 202 Accepted"                           
+                    INFO     HTTP Request: POST                 _client.py:1923
+                             http://127.0.0.1:8777/mcp_gateway                 
+                             "HTTP/1.1 200 OK"                                 
+NexusAI remote MCP gateway integration check
+Run: 2026-10-29 15:31:34
+MCP endpoint: http://127.0.0.1:8777/mcp_gateway  (auth: bearer static + OAuth2 PKCE)
+=== PART 1 ù Vercel deployment wiring ===
+PASS  cfg2. dashboard function registered
+PASS  cfg3. gateway function registered
+PASS  cfg4. framework preset preserved (flask) ù flask
+PASS  cfg5. /mcp rewrite -> /mcp_gateway
+PASS  cfg6. gateway bundle excludes .venv + tests
+PASS  cfg7. .vercelignore blocks .env + *.db + tests
+PASS  cfg8. requirements has no gateway secrets / untested drivers
+PASS  cfg9. .gitignore blocks .env, .vercel/, *.db
+
+=== PART 2 ù local stdio MCP servers still intact ===
+PASS  stdio1. config still has exactly 3 stdio servers
+PASS  stdio2. all configured commands still exist
+PASS  stdio3. task MCP server still exposes its 4 tools
+PASS  stdio4. store MCP server still exposes 25 tools
+
+=== PART 3 ù gateway without MCP_GATEWAY_TOKEN fails closed ===
+PASS  noauth1. /healthz is 503 disabled without token ù {"status":"disabled","mode":"readonly-demo","transport":"streamable-http","tools_total":13,"auth":[null,"oauth2-pkce"],"database":{"reachable":false,"persistent":false}}
+PASS  noauth2. health reason exposed without secrets
+PASS  noauth3. /mcp is 503 even WITH a bearer when token not configured ù 503 {"status": "disabled", "reason": "MCP_GATEWAY_TOKEN missing or GATEWAY_MODE unsupported"}
+
+Starting gateway on :8777 (temp DB: C:\Users\ABDUL-~1\AppData\Local\Temp\gw_int_74gr3f50)
+PASS  srv1. gateway boots and /healthz is 200 ok ù {"status":"ok","mode":"readonly-demo","transport":"streamable-http","tools_total":13,"auth":["bearer","oauth2-pkce"],"database":{"reachable":true,"persistent":false}}
+PASS  srv2. health reports non-persistent database ù {'status': 'ok', 'mode': 'readonly-demo', 'transport': 'streamable-http', 'tools_total': 13, 'auth': ['bearer', 'oauth2-pkce'], 'database': {'reachable': True, 'persistent': False}}
+PASS  srv3. health reports 13 tools + streamable-http ù {'status': 'ok', 'mode': 'readonly-demo', 'transport': 'streamable-http', 'tools_total': 13, 'auth': ['bearer', 'oauth2-pkce'], 'database': {'reachable': True, 'persistent': False}}
+
+=== PART 4 ù real Streamable HTTP + static bearer (official MCP client) ===
+PASS  http1. POST without Authorization -> 401 ù 401 {"error": "unauthorized", "error_description": "Bearer token required."}
+PASS  http2. 401 carries WWW-Authenticate + resource_metadata ù Bearer resource_metadata="http://127.0.0.1:8777/.well-known/oauth-protected-resource"
+PASS  http3. POST with wrong bearer -> 401 ù 401
+PASS  mcp1. initialize + tools/list over real Streamable HTTP ù 13 tools
+PASS  mcp2. exactly the 13 read-only tools ù ['generate_business_report', 'get_business_summary', 'get_dashboard_summary', 'get_low_stock', 'get_product', 'get_profit_loss', 'get_sale', 'get_sales_summary', 'get_stock_valuation', 'list_products', 'list_purchases', 'list_sales', 'list_workers']
+PASS  mcp3. read tool works and returns [DEMO] seeded data ù [
+  {
+    "id": 5,
+    "name": "[DEMO] 7UP",
+    "brand": "7UP",
+    "size_label": "1.5L",
+    "sku"
+PASS  mcp4. dashboard summary tool returns data ù {
+  "today": "2026-10-29",
+  "products_active": 6,
+  "stock_units_total": 1451,
+
+PASS  mcp5. write tool NOT available on gateway (unknown tool) ù Unknown tool: create_sale
+PASS  mcp6. seed/reset tools NOT available on gateway ù Unknown tool: seed_demo_data
+PASS  mcp7. no token in any tool payload
+
+=== PART 5 ù OAuth 2.1 flow (ChatGPT-style) ===
+PASS  oauth1. AS discovery served under gateway ù 200
+PASS  oauth2. metadata sane (S256 only, code+refresh, auth method none) ù {'issuer': 'http://127.0.0.1:8777', 'authorization_endpoint': 'http://127.0.0.1:8777/mcp_gateway/authorize', 'token_endpoint': 'http://127.0.0.1:8777/mcp_gateway/token', 'registration_endpoint': 'http://127.0.0.1:8777/mcp_gateway/register', 'response_types_supported': ['code'], 'grant_types_supported': ['authorization_code', 'refresh_token'], 'code_challenge_methods_supported': ['S256'], 'token_endpoint_auth_methods_supported': ['none'], 'scopes_supported': ['mcp:read']}
+PASS  oauth3. protected-resource metadata served ù 200
+PASS  oauth4. DCR registration (201) ù 201
+PASS  oauth5. authorize shows login form ù 200
+PASS  oauth6. wrong password -> 401 ù 401
+PASS  oauth7. correct credentials -> 302 with code ù 302 
+PASS  oauth8. redirect carries code + state ù https://chatgpt.com/cb?code=ng1.eyJjaGFsbGVuZ2UiOiJQclBYT1JxaDdydnBHQnNVOU93eDV6NnlkM19aRUYwZG12dDU1bzE5RG9zIiwiY2xpZW50
+PASS  oauth9. wrong PKCE verifier rejected (400) ù 400
+PASS  oauth10. PKCE exchange issues access+refresh ù {"access_token":"ng1.eyJleHAiOjE3OTMzNTYzMTAsImlhdCI6MTc5MzI2OTkxMCwic2NvcGUiOiJtY3A6cmVhZCIsInR5cCI6ImFjY2VzcyJ9.dq2Sw2M1K38dvzpyDO0eRki_x_GlQXgti1mW
+PASS  oauth11. refresh grant works ù 200
+PASS  oauth12. MCP initialize + tools/list with OAUTH access token ù 13
+PASS  oauth13. static token never leaked in OAuth responses
+PASS  srv4. GET /mcp without auth -> 401 (path routed) ù 401
+
+=== PART 6 ù leak scan + real database protection ===
+PASS  guard1. dashboard /healthz still 200 (unchanged) ù 200
+PASS  guard2. token not in dashboard healthz
+PASS  guard3. Flask serves reserved /.well-known/oauth-authorization-server ù 200
+PASS  guard4. AS metadata points at /mcp_gateway endpoints ù {'issuer': 'http://127.0.0.1:8777', 'authorization_endpoint': 'http://127.0.0.1:8777/mcp_gateway/authorize', 'token_endpoint': 'http://127.0.0.1:8777/mcp_gateway/token', 'registration_endpoint': 'http://127.0.0.1:8777/mcp_gateway/register', 'response_types_supported': ['code'], 'grant_types_supported': ['authorization_code', 'refresh_token'], 'code_challenge_methods_supported': ['S256'], 'token_endpoint_auth_methods_supported': ['none'], 'scopes_supported': ['mcp:read']}
+PASS  guard5. no secrets in discovery doc
+PASS  guard6. Flask serves protected-resource metadata ù 200
+PASS  guard7. nexusai.db byte-identical after gateway run ù 4d4f0f8db61f720c973fdf2f665411ba0fd5cd71860a45600ec3e7ffa7eaf045 != 4d4f0f8db61f720c973fdf2f665411ba0fd5cd71860a45600ec3e7ffa7eaf045
+PASS  guard7. store.db byte-identical after gateway run ù 34a47a09338ce94631bf920489406776914beb24e2604a931af812cff8b87eb5 != 34a47a09338ce94631bf920489406776914beb24e2604a931af812cff8b87eb5
+PASS  guard7. notes.db byte-identical after gateway run ù 8222095856b70b05290ea26a5f3974211ba13e2c19e2b94303c82a78f306cc97 != 8222095856b70b05290ea26a5f3974211ba13e2c19e2b94303c82a78f306cc97
+============================================================
+51/51 gateway integration checks PASSED

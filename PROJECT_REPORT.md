@@ -2,19 +2,20 @@
 ## Project Report (current state)
 
 **Project path:** `C:\Users\Abdul-Hannan\Desktop\Projects\MCP`
-**Report date:** 28 October 2026
-**Final automated runs (this date, actual execution):**
+**Report date:** 29 October 2026 (Phase 2: remote MCP gateway added)
+**Final automated runs (actual execution):**
 
 | Gate | Result | Exit code |
 |---|---|---|
-| `pytest -q` | **126 passed** | 0 |
+| `pytest -q` | **144 passed** (incl. 18 gateway tests) | 0 |
 | `acceptance_audit.py` | **62/62 checks passed** | 0 |
-| `client_integration_check.py` | **45/45 checks passed** | 0 |
+| `client_integration_check.py` | **45/45 checks passed** (stdio preserved) | 0 |
+| `gateway_integration_check.py` | **51/51 checks passed** (real HTTP) | 0 |
 | `verify.py` (earlier run, 28 Oct) | **34/34 passed** | 0 |
 | Real-DB SHA-256 guard | **all 3 databases byte-identical (H0 == final)** | — |
 
-Full logs with timestamps: `TEST_OUTPUT.txt`, `AUDIT_OUTPUT.txt`, `INTEGRATION_OUTPUT.txt`,
-`VERIFY_OUTPUT.txt`.
+Full logs: `TEST_OUTPUT.txt`, `AUDIT_OUTPUT.txt`, `INTEGRATION_OUTPUT.txt`,
+`GATEWAY_OUTPUT.txt`, `VERIFY_OUTPUT.txt`.
 
 ---
 
@@ -84,6 +85,30 @@ Ready on our side (all verified locally, 25 dedicated tests green):
   DBs, outputs, audit scripts, `notes_server/`), `.vercelignore`, `.python-version` (`3.14`).
 - **`requirements.txt` unchanged** — deliberately no Turso/libsql driver (see blockers).
 
+## 4-b. Phase 2 — Remote MCP gateway (29 Oct, added)
+
+`mcp_gateway.py` — MCP **Streamable HTTP** (stateless, serverless-safe) so any AI
+(ChatGPT, agents, scripts) can control the store remotely:
+
+- **Auth (dual, tested over real sockets):** static `Authorization: Bearer` token
+  (curl/agents) + minimal stateless **OAuth 2.1** (PKCE S256, DCR, HMAC-signed
+  codes/access/refresh tokens, single-user login page) — ChatGPT supports only
+  OAuth/no-auth, not static custom headers (verified from OpenAI docs).
+- **Reserved `/.well-known/*` paths** are served by the main Flask app (Vercel
+  forbids rewriting `/.well-known`); endpoints live under `/mcp_gateway/*`.
+  Shared builders in `oauth_meta.py` (consistency test enforces no drift).
+- **Read-only tool surface:** exactly 13 read tools; 12 write tools (sales,
+  purchases, stock, expenses, seed/reset) are NOT registered — on Vercel the DB
+  is `/tmp` (ephemeral, `[DEMO]`-seeded per cold start, `persistent:false` in
+  `/healthz`). No false claims of persistence; real data untouched locally.
+- **Fail-closed:** no `MCP_GATEWAY_TOKEN` → healthz `disabled` (503), `/mcp` 503.
+  Unsupported `GATEWAY_MODE` also fails closed.
+- **New env vars:** `MCP_GATEWAY_TOKEN` (required), `MCP_GATEWAY_USER`
+  (default admin), `GATEWAY_MODE` (default readonly-demo).
+- **Vercel wiring:** `vercel.json` registers `mcp_gateway.py` as a second function
+  (slim bundle) + `/mcp` rewrite; `GATEWAY_OUTPUT.txt` = 51/51 evidence.
+- **Preserved:** stdio config/servers untouched (45/45 original integration gate).
+
 ## 5. Honest limitations / blockers (not hidden)
 
 1. **Vercel deployment itself is NOT done** — it requires the owner's Vercel account
@@ -94,14 +119,17 @@ Ready on our side (all verified locally, 25 dedicated tests green):
    machine (pyturso: zero Windows wheels → Rust build fails without MSVC; libsql: wheels
    only up to CPython 3.12 on Windows; this project runs 3.14). Enabling an untested driver
    would risk breaking the Vercel build, so it was **not** added to `requirements.txt`.
-4. **Remote MCP HTTP gateway: not implemented** (by design this pass). All three MCP servers
-   remain stdio-only on your machine; Vercel HTTP functions cannot host stdio servers, and
-   an unauthenticated public MCP endpoint would be a security hole.
+4. **Remote MCP gateway: implemented in Phase 2** (`mcp_gateway.py`, Streamable HTTP +
+   bearer/OAuth) — but LIVE verification needs the deployed URL + your ChatGPT account.
+   Stdio servers remain untouched as the local path.
 5. **Vercel CLI is not installed** on this machine and `npx` is blocked by PowerShell
    execution policy — the user must install/login (`npm install -g vercel; vercel login`)
    or use the Vercel web dashboard.
 6. **Hobby plan caveats:** free for non-commercial use; functions pause after inactivity
    (cold starts); 300s timeout; non-commercial usage limits apply.
+7. **`/.well-known` routing on Vercel is unverified until first deploy** (Vercel marks the
+   path reserved; we serve it from the main app — must be curl-verified post-deploy
+   before ChatGPT setup, README step 2).
 
 ## 6. Verified vs not-tested vs requires-authorization
 
