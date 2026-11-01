@@ -438,12 +438,21 @@ def test_flask_serves_well_known_and_agrees_with_gateway():
 def test_vercel_config_wires_gateway():
     cfg = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
     fns = cfg.get("functions", {})
-    assert "mcp_gateway.py" in fns, "gateway function not registered"
-    assert "app.py" in fns, "dashboard function must stay registered"
-    gw_exclude = fns["mcp_gateway.py"].get("excludeFiles", "")
-    assert ".venv" in gw_exclude and "tests" in gw_exclude
+    assert "app.py" in fns, "app.py function must stay registered"
+    # mcp_gateway is now bridged into app.py (WSGI->ASGI); no separate function
+    # With the flask framework preset every request routes to app.py, so a
+    # separate mcp_gateway.py entry would be a dead no-op.
+    assert "mcp_gateway.py" not in fns, (
+        "mcp_gateway.py must NOT be a separate function: "
+        "with flask framework preset all requests route to app.py"
+    )
+    app_exclude = fns["app.py"].get("excludeFiles", "")
+    assert ".venv" in app_exclude and "tests" in app_exclude
+    # The /mcp->>/mcp_gateway rewrite is removed; app.py handles both paths
     rw = cfg.get("rewrites", [])
-    assert {"source": "/mcp", "destination": "/mcp_gateway"} in rw
+    assert {"source": "/mcp", "destination": "/mcp_gateway"} not in rw, (
+        "Old rewrite must be removed; /mcp is now handled by app.py bridge"
+    )
     text = (ROOT / ".vercelignore").read_text(encoding="utf-8")
     assert ".env" in text and "*.db" in text and "tests" in text
 

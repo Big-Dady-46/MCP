@@ -3,15 +3,24 @@
 Binds to 127.0.0.1 only (localhost). No cloud, no API key, no external
 services. All business logic lives in database.py so the MCP server and
 this app always operate on the same data.
+
+Vercel note: with the `flask` framework preset every request is routed to
+this single function (framework apps handle all requests; extra root-level
+`functions` entries do not create routes). The remote MCP gateway
+(mcp_gateway.py) is therefore served from HERE via a WSGI->ASGI bridge
+(see the /mcp and /mcp_gateway routes below).
 """
 
+import asyncio
 import os
 import platform
 import secrets
 import sys
+import threading
 
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     jsonify,
@@ -83,6 +92,11 @@ NAV_ITEMS = [
 @app.before_request
 def protect_post():
     if request.method != "POST":
+        return None
+    # MCP/OAuth protocol endpoints are authenticated by bearer tokens or the
+    # OAuth flow itself (not by browser cookies), so CSRF does not apply.
+    path = request.path
+    if path == "/mcp" or path.startswith("/mcp/") or path.startswith("/mcp_gateway"):
         return None
     token = session.get("csrf_token")
     if not token:
@@ -162,6 +176,170 @@ def well_known_protected_resource(resource_path=None):
 def well_known_authorization_server():
     return jsonify(oauth_meta.authorization_server_metadata(
         oauth_meta.normalize_origin(request.url_root)))
+
+
+# ---------------------------------------------------------------------------
+# Remote MCP gateway bridge (WSGI -> ASGI)
+#
+# The gateway (mcp_gateway.py) is a pure ASGI app. On Vercel's flask
+# framework preset every request lands in THIS WSGI function, so /mcp and
+# /mcp_gateway* are dispatched into the gateway via a dedicated background
+# event loop (the MCP streamable-HTTP session manager needs one long-lived
+# loop; per-request asyncio.run would tear it down after every request).
+# ---------------------------------------------------------------------------
+
+_gateway_loop = None
+_gateway_loop_lock = threading.Lock()
+
+
+def _get_gateway_loop() -> asyncio.AbstractEventLoop:
+    """Return the shared background loop running the gateway ASGI app."""
+    global _gateway_loop
+    if _gateway_loop is None:
+        with _gateway_loop_lock:
+            if _gateway_loop is None:
+                try:
+                    import mcp_gateway  # noqa: F401
+                except Exception:
+                    pass
+                loop = asyncio.new_event_loop()
+
+                def _run() -> None:
+                    asyncio.set_event_loop(loop)
+                    loop.run_forever()
+
+                threading.Thread(
+                    target=_run, daemon=True, name="mcp-gateway-loop"
+                ).start()
+                _gateway_loop = loop
+    return _gateway_loop
+
+
+async def _gateway_asgi_call(scope: dict, body: bytes) -> list:
+    import mcp_gateway
+
+    messages: list = []
+    body_consumed = False
+    disconnect_event = asyncio.Event()
+
+    async def receive() -> dict:
+        nonlocal body_consumed
+        if not body_consumed:
+            body_consumed = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await disconnect_event.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        messages.append(message)
+
+    try:
+        await mcp_gateway.app(scope, receive, send)
+    finally:
+        disconnect_event.set()
+    return messages
+
+
+def _dispatch_to_gateway(scope: dict, body: bytes, timeout: float = 60.0):
+    """Run one HTTP request through the gateway ASGI app on the shared loop."""
+    import concurrent.futures
+
+    future = asyncio.run_coroutine_threadsafe(
+        _gateway_asgi_call(scope, body), _get_gateway_loop()
+    )
+    return future.result(timeout=timeout)
+
+
+_HOP_BY_HOP = {
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade", "content-length",
+}
+
+
+def _gateway_bridge():
+    """Serve /mcp and /mcp_gateway[/...] through the ASGI gateway app."""
+    try:
+        import mcp_gateway
+    except Exception:
+        return jsonify({
+            "error": "gateway_unavailable",
+            "error_description": "Gateway module failed to import.",
+        }), 503
+    if not mcp_gateway.gateway_enabled():
+        return jsonify({
+            "status": "disabled",
+            "reason": "MCP_GATEWAY_TOKEN missing or GATEWAY_MODE unsupported",
+        }), 503
+
+    host_str = request.host
+    if ":" in host_str:
+        host_name, port_str = host_str.split(":", 1)
+        try:
+            host_port = int(port_str)
+        except ValueError:
+            host_port = 443 if request.scheme == "https" else 80
+    else:
+        host_name = host_str
+        host_port = 443 if request.scheme == "https" else 80
+
+    path = request.path
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": request.method,
+        "scheme": request.headers.get("X-Forwarded-Proto", request.scheme),
+        "path": path,
+        "raw_path": path.encode("latin-1"),
+        "query_string": request.query_string,
+        "root_path": "",
+        "headers": [
+            (k.lower().encode("latin-1"), v.encode("latin-1"))
+            for k, v in request.headers.items()
+        ],
+        "client": (request.remote_addr or "127.0.0.1", 0),
+        "server": (host_name, host_port),
+    }
+    body = request.get_data()
+    try:
+        messages = _dispatch_to_gateway(scope, body)
+    except Exception as exc:
+        app.logger.error("Gateway dispatch failed: %s", exc)
+        return jsonify({
+            "error": "gateway_error",
+            "error_description": "Gateway failed to process the request.",
+        }), 502
+
+    status = 500
+    headers: list = []
+    chunks: list = []
+    for message in messages:
+        mtype = message.get("type")
+        if mtype == "http.response.start":
+            status = message.get("status", 500)
+            headers = [
+                (k.decode("latin-1"), v.decode("latin-1"))
+                for k, v in message.get("headers", [])
+            ]
+        elif mtype == "http.response.body":
+            chunks.append(message.get("body", b""))
+    payload = b"".join(chunks)
+    safe_headers = [
+        (k, v) for k, v in headers if k.lower() not in _HOP_BY_HOP
+    ]
+    return Response(payload, status=status, headers=safe_headers)
+
+
+@app.route("/mcp", methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"], strict_slashes=False)
+@app.route("/mcp/<path:sub>", methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"], strict_slashes=False)
+def mcp_bridge(sub: str = "", **_kwargs):
+    return _gateway_bridge()
+
+
+@app.route("/mcp_gateway", methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"], strict_slashes=False)
+@app.route("/mcp_gateway/<path:sub>", methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"], strict_slashes=False)
+def mcp_gateway_bridge(sub: str = "", **_kwargs):
+    return _gateway_bridge()
 
 
 # ---------------------------------------------------------------------------

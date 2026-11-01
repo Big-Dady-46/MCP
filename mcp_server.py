@@ -252,23 +252,27 @@ TOOL_META = {
 def get_tool_definitions() -> list:
     """Return the REAL registered tools: name, description, input schema,
     annotations. Used by the /tools page and the /status page."""
-    import asyncio
-    import inspect
-
-    result = mcp.list_tools()
-    if inspect.isawaitable(result):
-        tools = asyncio.run(result)
+    if hasattr(mcp, "_tool_manager"):
+        tools = mcp._tool_manager.list_tools()
     else:
-        tools = result
+        import asyncio
+        import inspect
+
+        result = mcp.list_tools()
+        if inspect.isawaitable(result):
+            tools = asyncio.run(result)
+        else:
+            tools = result
 
     out = []
     for t in tools:
         meta = TOOL_META.get(t.name, {"mode": "unknown", "read_only": None})
         ann = t.annotations
+        schema = getattr(t, "input_schema", None) or getattr(t, "parameters", None) or getattr(t, "inputSchema", None)
         out.append({
             "name": t.name,
             "description": (t.description or "").strip(),
-            "input_schema": t.input_schema,
+            "input_schema": schema,
             "annotations": {
                 "title": getattr(ann, "title", None) if ann else None,
                 "read_only_hint": getattr(ann, "read_only_hint", None) if ann else None,

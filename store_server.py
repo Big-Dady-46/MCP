@@ -491,19 +491,23 @@ TOOL_COUNT = 25
 
 
 def get_tool_definitions() -> list:
-    import asyncio
-    import inspect
-    result = mcp.list_tools()
-    tools = asyncio.run(result) if inspect.isawaitable(result) else result
+    if hasattr(mcp, "_tool_manager"):
+        tools = mcp._tool_manager.list_tools()
+    else:
+        import asyncio
+        import inspect
+        result = mcp.list_tools()
+        tools = asyncio.run(result) if inspect.isawaitable(result) else result
     if hasattr(tools, "tools"):
         tools = tools.tools
     out = []
     for t in tools:
         ann = t.annotations
+        schema = getattr(t, "input_schema", None) or getattr(t, "parameters", None) or getattr(t, "inputSchema", None)
         out.append({
             "name": t.name,
             "description": (t.description or "").strip(),
-            "input_schema": t.input_schema,
+            "input_schema": schema,
             "read_only": getattr(ann, "read_only_hint", None) if ann else None,
             "destructive": getattr(ann, "destructive_hint", None) if ann else None,
         })
