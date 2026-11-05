@@ -246,16 +246,23 @@ def check_conversational_shortcut(message: str) -> str | None:
     if not msg_clean:
         return "G, main aapki beverage store ke hawalay se kya madad kar sakta hoon?"
 
-    # If the message contains any store-specific keyword, do NOT shortcut: let the store handler process it
-    store_keywords = (
-        "samaan", "product", "item", "stock", "maal", "list", "beverage", "price",
-        "qeemat", "rate", "botal", "bottle", "sale", "bikri", "becha", "revenue",
-        "kamai", "gross", "income", "munafa", "report", "profit", "loss", "faida",
-        "nuqsan", "valuation", "hisab", "balance", "worker", "mulazim", "staff",
-        "salary", "tankhwah", "payroll", "purchase", "kharid", "order", "category",
-        "categories", "brand", "types", "low stock", "shortage", "inventory"
+    # If the user is asking any question or instruction, NEVER shortcut
+    question_triggers = (
+        "store", "batao", "dikhao", "check", "tell", "show", "kya", "kaya", "kia",
+        "para", "pari", "pada", "padi", "kuch", "kitna", "kitni", "kitne", "kon",
+        "kaun", "samaan", "product", "item", "stock", "maal", "list", "beverage",
+        "price", "qeemat", "rate", "botal", "bottle", "sale", "bikri", "becha",
+        "revenue", "kamai", "gross", "income", "munafa", "report", "profit",
+        "loss", "faida", "nuqsan", "valuation", "hisab", "balance", "worker",
+        "mulazim", "staff", "salary", "tankhwah", "payroll", "purchase", "kharid",
+        "order", "category", "categories", "brand", "types", "low stock", "shortage"
     )
-    if any(k in msg_clean for k in store_keywords):
+    if any(q in msg_clean for q in question_triggers):
+        return None
+
+    # Only short messages (<= 3 words) can be pure greetings or pure acknowledgments
+    tokens = [w.strip("!?,.;:") for w in msg_clean.split() if w.strip("!?,.;:")]
+    if len(tokens) > 3:
         return None
 
     # Exact greeting or greeting phrase
@@ -264,7 +271,7 @@ def check_conversational_shortcut(message: str) -> str | None:
         "aoa", "kese ho", "kaise ho", "kia haal hai", "kya haal hai", "kia hal ha", "kia hal hai",
         "hal chal", "kya hal he", "kia hal he", "good morning", "good evening", "good afternoon"
     }
-    if msg_clean in greetings or any(msg_clean.startswith(g + " ") or msg_clean.startswith(g + "!") or msg_clean.startswith(g + ",") or msg_clean.startswith(g + "?") for g in greetings):
+    if msg_clean in greetings or " ".join(tokens) in greetings:
         return (
             "Hello! Kaise hain aap? Main NexusAI Beverage Store AI Assistant hoon. "
             "Aap mujh se store ke stock, products, sales, purchases ya reports ke bare mein pooch sakte hain. "
@@ -277,7 +284,7 @@ def check_conversational_shortcut(message: str) -> str | None:
         "shukriya", "thanks", "thank you", "thx", "ty", "bye", "allah hafiz", "khuda hafiz",
         "great", "zabardast", "good job", "nice", "fine", "cool", "perfect", "done sir", "ok done"
     }
-    if msg_clean in acknowledgments or any(msg_clean.startswith(a + " ") or msg_clean.startswith(a + ".") or msg_clean.startswith(a + "!") for a in acknowledgments):
+    if msg_clean in acknowledgments or " ".join(tokens) in acknowledgments:
         return (
             "Bohat behtareen! Agar store, stock ya sales ke hawalay se koi mazeed sawal ho to zaroor batayein."
         )
@@ -302,23 +309,30 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
     msg_clean = message.strip().lower()
     tools_used = []
 
-    # 1. Greetings / Conversational (NO tools needed)
-    greetings = {"hello", "hi", "hey", "salam", "assalam o alaikum", "aoa", "kese ho", "kaise ho", "kia haal hai", "kya haal hai", "kia hal ha", "hal chal"}
-    if any(msg_clean == g or msg_clean.startswith(g + " ") or msg_clean.startswith(g + "!") or msg_clean.startswith(g + ",") for g in greetings):
-        return (
-            "Hello! Kaise hain aap? Main NexusAI Beverage Store AI Assistant hoon. "
-            "Aap mujh se store ke samaan, stock levels, sales, purchases ya reports ke bare mein pooch sakte hain. "
-            "Bataiye main aapki kya madad kar sakta hoon?",
-            []
-        )
+    has_store_query = any(q in msg_clean for q in (
+        "store", "batao", "dikhao", "para", "pari", "pada", "padi", "samaan",
+        "stock", "maal", "sale", "report", "product", "item", "category",
+        "categories", "worker", "kya", "kaya", "kia", "kitna", "kitni", "kitne"
+    ))
 
-    # 2. Acknowledgements & Closing (NO tools needed)
-    acks = {"done", "ok", "okay", "theek", "theek hai", "thik hai", "achha", "acha", "shukriya", "thanks", "thank you", "bye", "allah hafiz", "khuda hafiz"}
-    if any(msg_clean == a or msg_clean.startswith(a + " ") or msg_clean.startswith(a + ".") or msg_clean.startswith(a + "!") for a in acks):
-        return (
-            "Bohat khoob! Agar store ke hawalay se koi mazeed sawal ho ya kisi cheez ki report chahiye ho to zaroor batayein.",
-            []
-        )
+    # 1. Greetings / Conversational (NO tools needed - only if no store query asked)
+    if not has_store_query:
+        greetings = {"hello", "hi", "hey", "salam", "assalam o alaikum", "aoa", "kese ho", "kaise ho", "kia haal hai", "kya haal hai", "kia hal ha", "hal chal"}
+        if any(msg_clean == g or msg_clean.startswith(g + " ") or msg_clean.startswith(g + "!") or msg_clean.startswith(g + ",") for g in greetings):
+            return (
+                "Hello! Kaise hain aap? Main NexusAI Beverage Store AI Assistant hoon. "
+                "Aap mujh se store ke samaan, stock levels, sales, purchases ya reports ke bare mein pooch sakte hain. "
+                "Bataiye main aapki kya madad kar sakta hoon?",
+                []
+            )
+
+        # 2. Acknowledgements & Closing (NO tools needed - only if no store query asked)
+        acks = {"done", "ok", "okay", "theek", "theek hai", "thik hai", "achha", "acha", "shukriya", "thanks", "thank you", "bye", "allah hafiz", "khuda hafiz"}
+        if any(msg_clean == a or msg_clean.startswith(a + " ") or msg_clean.startswith(a + ".") or msg_clean.startswith(a + "!") for a in acks):
+            return (
+                "Bohat khoob! Agar store ke hawalay se koi mazeed sawal ho ya kisi cheez ki report chahiye ho to zaroor batayein.",
+                []
+            )
 
     # 3. Product Categories / Brands / Types only (Clean list, not full inventory dump)
     if any(k in msg_clean for k in ("category", "categories", "kis kis", "types", "brands", "aqsaam")):
@@ -354,8 +368,13 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
         except Exception:
             return raw, tools_used
 
-    # 5. Products / Samaan / Inventory / Stock / Prices
-    if any(k in msg_clean for k in ("samaan", "product", "item", "stock", "maal", "list", "beverage", "price", "qeemat", "rate", "botal")):
+    # 5. Products / Samaan / Inventory / Stock / Prices / Kya para hai
+    if any(k in msg_clean for k in (
+        "samaan", "product", "item", "stock", "maal", "list", "beverage",
+        "price", "qeemat", "rate", "botal", "bottle", "store", "para", "pari",
+        "pada", "padi", "kya kuch", "kaya kuch", "kia kuch", "kya kya", "kaya kaya",
+        "kia kia", "kya hai", "kaya hai", "kia hai", "mojood", "items", "inventory"
+    )):
         tools_used.append("list_products")
         raw = execute_tool("list_products", {})
         try:
@@ -475,7 +494,7 @@ def chat_turn(
 
         client = genai.Client(
             api_key=api_key,
-            http_options=types.HttpOptions(timeout=4.0),
+            http_options=types.HttpOptions(timeout=25.0),
         )
 
         # Convert 13 read-only tool definitions to Gemini function declarations
