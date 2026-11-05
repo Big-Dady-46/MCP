@@ -340,7 +340,55 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
                 []
             )
 
-    # 3. Customers / Orders / Transactions / Footfall
+    # 3. Product Comparisons & Price queries (cheaper / expensive / price difference)
+    if any(k in msg_clean for k in ("mehenga", "mehnga", "sasta", "expensive", "cheaper", "cheap", "compare", "difference", "farq", "highest price", "lowest price")):
+        tools_used.append("list_products")
+        raw = execute_tool("list_products", {})
+        try:
+            items = json.loads(raw)
+            # Find any specific drinks mentioned
+            alias_map = {
+                "7up": ["7up"],
+                "coke": ["coke", "coca", "cola"],
+                "pepsi": ["pepsi"],
+                "fanta": ["fanta"],
+                "sprite": ["sprite"],
+                "water": ["water", "mineral", "aquapure"],
+            }
+            mentioned_prods = []
+            for key, aliases in alias_map.items():
+                if any(a in msg_clean for a in aliases):
+                    matching = [
+                        p for p in items
+                        if any(a in (p.get("name", "") + " " + p.get("brand", "")).lower() for a in aliases)
+                    ]
+                    if matching:
+                        match = next((p for p in matching if "[demo]" in p["name"].lower()), matching[0])
+                        if match not in mentioned_prods:
+                            mentioned_prods.append(match)
+
+            if len(mentioned_prods) >= 2:
+                p1, p2 = mentioned_prods[0], mentioned_prods[1]
+                pr1, pr2 = p1.get("sell_price", 0), p2.get("sell_price", 0)
+                diff = abs(pr1 - pr2)
+                if pr1 == pr2:
+                    return f"Both **{p1['name']}** and **{p2['name']}** are priced equally at **PKR {pr1:.2f}**.", tools_used
+                more_exp = p1 if pr1 > pr2 else p2
+                less_exp = p2 if pr1 > pr2 else p1
+                return (
+                    f"**{more_exp['name']}** (PKR {more_exp.get('sell_price', 0):.2f}) is more expensive than "
+                    f"**{less_exp['name']}** (PKR {less_exp.get('sell_price', 0):.2f}) by **PKR {diff:.2f}**."
+                ), tools_used
+            elif any(k in msg_clean for k in ("sasta", "cheap", "cheapest", "lowest")):
+                cheapest = min(items, key=lambda x: x.get("sell_price", 999999))
+                return f"The cheapest beverage in our store is **{cheapest['name']}** at **PKR {cheapest.get('sell_price', 0):.2f}** per bottle.", tools_used
+            elif any(k in msg_clean for k in ("mehenga", "mehnga", "expensive", "highest")):
+                most_exp = max(items, key=lambda x: x.get("sell_price", 0))
+                return f"The most expensive beverage in our store is **{most_exp['name']}** at **PKR {most_exp.get('sell_price', 0):.2f}** per bottle.", tools_used
+        except Exception:
+            pass
+
+    # 4. Customers / Orders / Transactions / Footfall
     if any(k in msg_clean for k in ("customer", "customers", "client", "clients", "order", "orders", "grahak", "receipt", "transaction")):
         tools_used.append("list_sales")
         raw_sales = execute_tool("list_sales", {"limit": 100})
