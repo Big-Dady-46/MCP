@@ -3,6 +3,7 @@
   "framework": "flask",
   "functions": {
     "app.py": {
+      "maxDuration": 60,
       "excludeFiles": "{.venv/**,venv/**,tests/**,.agents/**,**/*.db,**/*.db-wal,**/*.db-shm,*_OUTPUT.txt,acceptance_audit.py,client_integration_check.py,gateway_integration_check.py,verify.py,notes_server/**,.opencode/**}"
     }
   },

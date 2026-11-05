@@ -190,8 +190,15 @@
         })
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
       removeLoading();
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        data = { status: "error", response: responseText || "Server returned a non-JSON response." };
+      }
 
       if (data.status === "ok") {
         appendMessage("bot", data.response, data.tools_used);

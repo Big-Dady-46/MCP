@@ -144,23 +144,34 @@ def execute_tool(
     endpoint: str | None = None,
     token: str | None = None,
 ) -> str:
-    """Execute a read-only store tool via remote MCP Streamable HTTP.
+    """Execute a read-only store tool via store MCP tools.
     
-    Falls back to local store_server if the remote call is unreachable or
-    during offline development.
+    Uses direct local store_server execution for instant sub-millisecond response
+    without serverless loop timeouts, and falls back to remote MCP Streamable HTTP.
     """
     if name not in ALLOWED_READ_ONLY_TOOLS:
         return f"Error: Tool '{name}' is not an authorized read-only tool on this gateway."
 
     args = arguments or {}
 
-    # 1. Try remote MCP Streamable HTTP call
+    # Fast path: direct store_server execution (instant, avoids serverless recursion)
+    try:
+        import store_server
+        tool_fn = getattr(store_server, name, None)
+        if tool_fn is not None:
+            raw_res = tool_fn(**args)
+            return raw_res if isinstance(raw_res, str) else json.dumps(raw_res, default=str)
+    except Exception as local_exc:
+        logger.info("Local store_server execution skipped: %s", local_exc)
+
+    # Remote MCP Streamable HTTP call (with fast 3-second timeout)
     try:
         res = call_remote_mcp(
             method="tools/call",
             params={"name": name, "arguments": args},
             endpoint=endpoint,
             token=token,
+            timeout=3.0,
         )
         if "error" in res:
             err_msg = res["error"].get("message", str(res["error"]))
@@ -177,19 +188,9 @@ def execute_tool(
                     return "\n".join(texts)
             return json.dumps(result_obj, ensure_ascii=False)
     except Exception as exc:
-        logger.info("Remote MCP call unsuccessful (%s), attempting local tool execution...", exc)
+        logger.error("Remote MCP call failed: %s", exc)
 
-    # 2. Local fallback if remote call failed or in local test environment
-    try:
-        import store_server
-        tool_fn = getattr(store_server, name, None)
-        if tool_fn is not None:
-            raw_res = tool_fn(**args)
-            return raw_res if isinstance(raw_res, str) else json.dumps(raw_res, default=str)
-    except Exception as local_exc:
-        logger.error("Local fallback tool execution failed: %s", local_exc)
-
-    return f"Error executing tool '{name}': remote MCP failed and local tool unavailable."
+    return f"Error executing tool '{name}': unable to retrieve data."
 
 
 def get_gemini_tool_declarations() -> list[dict[str, Any]]:
@@ -270,74 +271,7 @@ def chat_turn(
     tools_used: list[str] = []
 
     # -------------------------------------------------------------------------
-    # Strategy 1: Google GenAI Interactions API (native remote MCP server tool)
-    # -------------------------------------------------------------------------
-    try:
-        from google import genai
-
-        client = genai.Client(api_key=api_key)
-        mcp_tool_spec = {
-            "type": "mcp_server",
-            "name": "nexusai_store",
-            "url": remote_url,
-            "headers": {
-                "Authorization": f"Bearer {gateway_token}",
-            },
-        }
-
-        # Build prompt with conversation history context
-        formatted_prompt = message
-        if history:
-            history_lines = []
-            for item in history[-6:]:
-                role = item.get("role", "user")
-                content = item.get("content", "")
-                history_lines.append(f"{role.capitalize()}: {content}")
-            if history_lines:
-                formatted_prompt = (
-                    "Conversation Context:\n"
-                    + "\n".join(history_lines)
-                    + f"\n\nCurrent User Request:\n{message}"
-                )
-
-        logger.info("Calling Gemini Interactions API with remote MCP Streamable HTTP...")
-        interaction = client.interactions.create(
-            model=model_name,
-            input=formatted_prompt,
-            tools=[mcp_tool_spec],
-            system_instruction=SYSTEM_INSTRUCTION,
-        )
-
-        output_text = getattr(interaction, "output_text", None)
-        if not output_text and hasattr(interaction, "outputs") and interaction.outputs:
-            output_text = "".join(
-                getattr(o, "text", "") for o in interaction.outputs if hasattr(o, "text")
-            )
-
-        # Detect any tools used in interaction trace
-        if hasattr(interaction, "steps"):
-            for step in interaction.steps or []:
-                tool_call = getattr(step, "mcp_server_tool_call", None)
-                if tool_call and hasattr(tool_call, "name"):
-                    tools_used.append(tool_call.name)
-
-        if output_text and output_text.strip():
-            return {
-                "status": "ok",
-                "response": output_text.strip(),
-                "tools_used": tools_used,
-                "model": model_name,
-            }
-
-    except Exception as exc:
-        logger.warning(
-            "Gemini Interactions API with remote MCP hit exception: %s. "
-            "Falling back to Gemini function calling loop...",
-            exc,
-        )
-
-    # -------------------------------------------------------------------------
-    # Strategy 2: Gemini Function Calling Loop via Streamable HTTP tools/call
+    # Gemini Function Calling with Store MCP Tools (Fast & Serverless Safe)
     # -------------------------------------------------------------------------
     try:
         from google import genai
@@ -345,7 +279,7 @@ def chat_turn(
 
         client = genai.Client(api_key=api_key)
 
-        # Convert tool definitions to Gemini types
+        # Convert 13 read-only tool definitions to Gemini function declarations
         function_declarations = get_gemini_tool_declarations()
 
         # Build contents from history
@@ -353,18 +287,20 @@ def chat_turn(
         if history:
             for item in history[-6:]:
                 role = "user" if item.get("role") == "user" else "model"
-                contents.append(
-                    types.Content(
-                        role=role,
-                        parts=[types.Part.from_text(text=item.get("content", ""))],
+                text_val = str(item.get("content", "")).strip()
+                if text_val:
+                    contents.append(
+                        types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=text_val)],
+                        )
                     )
-                )
         contents.append(
             types.Content(role="user", parts=[types.Part.from_text(text=message)])
         )
 
-        # Multi-turn tool execution loop (up to 5 turns)
-        max_turns = 5
+        # Multi-turn tool execution loop (up to 4 turns)
+        max_turns = 4
         for _ in range(max_turns):
             response = client.models.generate_content(
                 model=model_name,
@@ -386,7 +322,7 @@ def chat_turn(
                         fn_args = dict(part.function_call.args or {})
                         tools_used.append(fn_name)
 
-                        # Execute tool against remote MCP Streamable HTTP endpoint
+                        # Execute tool immediately
                         tool_result = execute_tool(
                             name=fn_name,
                             arguments=fn_args,
@@ -394,7 +330,7 @@ def chat_turn(
                             token=gateway_token,
                         )
 
-                        # Append model response and tool output to history
+                        # Append model function call and function response to contents
                         contents.append(candidate.content)
                         contents.append(
                             types.Content(
@@ -410,8 +346,7 @@ def chat_turn(
                         break
 
             if not has_func_call:
-                # Model provided final text
-                reply = response.text or "I processed your request using the store tools."
+                reply = response.text or "Store tools processed your request."
                 return {
                     "status": "ok",
                     "response": reply.strip(),
@@ -420,7 +355,7 @@ def chat_turn(
                 }
 
     except Exception as exc:
-        logger.error("Gemini function-calling loop failed: %s", exc)
+        logger.error("Gemini function-calling loop error: %s", exc)
         return {
             "status": "error",
             "response": f"Failed to generate AI response: {exc}",
