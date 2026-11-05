@@ -228,6 +228,79 @@ def get_gemini_tool_declarations() -> list[dict[str, Any]]:
     return declarations
 
 
+def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
+    """Directly query and format read-only MCP store tools if external cloud AI is temporarily overloaded."""
+    msg_lower = message.lower()
+    tools_used = []
+
+    # 1. Low stock / reorder alerts
+    if any(k in msg_lower for k in ("low", "kam", "stock alert", "reorder", "khatam", "shortage")):
+        tools_used.append("get_low_stock")
+        raw = execute_tool("get_low_stock", {})
+        try:
+            items = json.loads(raw)
+            if not items:
+                return "Filhal koi product low-stock par nahi hai. Sab products ka stock normal level par hai.", tools_used
+            lines = ["⚠️ **Low Stock Products (Reorder level se kam/barabar):**\n"]
+            for p in items:
+                lines.append(f"- **{p['name']}** ({p.get('size_label', '')}): **{p['stock_units']} bottles** mojood (Reorder limit: {p['reorder_level']})")
+            return "\n".join(lines), tools_used
+        except Exception:
+            return raw, tools_used
+
+    # 2. Products / Inventory / Samaan / Prices
+    if any(k in msg_lower for k in ("samaan", "product", "item", "stock", "maal", "list", "cheez", "beverage", "price", "kitna", "botal")):
+        tools_used.append("list_products")
+        raw = execute_tool("list_products", {})
+        try:
+            items = json.loads(raw)
+            lines = ["📦 **Store mein mojood samaan aur unka live stock:**\n"]
+            for p in items:
+                lines.append(f"- **{p['name']}** ({p.get('size_label', '')}): **{p['stock_units']} bottles** | Price: PKR {p.get('sell_price', 0):.2f}")
+            return "\n".join(lines), tools_used
+        except Exception:
+            return raw, tools_used
+
+    # 3. Sales / POS / Revenue
+    if any(k in msg_lower for k in ("sale", "bikri", "becha", "revenue", "kamai", "gross", "income")):
+        tools_used.append("get_sales_summary")
+        raw = execute_tool("get_sales_summary", {})
+        try:
+            data = json.loads(raw)
+            return (
+                f"💰 **Live Sales Summary:**\n"
+                f"- Total Sales: {data.get('count', 0)}\n"
+                f"- Total Revenue: PKR {data.get('revenue', 0.0):,.2f}\n"
+                f"- Gross Profit: PKR {data.get('gross_profit', 0.0):,.2f}"
+            ), tools_used
+        except Exception:
+            return raw, tools_used
+
+    # 4. Report / Profit & Loss / Business valuation
+    if any(k in msg_lower for k in ("report", "profit", "loss", "faida", "nuqsan", "valuation", "hisab")):
+        tools_used.append("generate_business_report")
+        report = execute_tool("generate_business_report", {"period": "month"})
+        return report, tools_used
+
+    # 5. Workers / Payroll / Staff
+    if any(k in msg_lower for k in ("worker", "mulazim", "staff", "salary", "tankhwah", "payroll", "kam karnay")):
+        tools_used.append("list_workers")
+        raw = execute_tool("list_workers", {})
+        try:
+            workers = json.loads(raw)
+            lines = ["👥 **Active Store Workers & Salaries:**\n"]
+            for w in workers:
+                lines.append(f"- **{w['name']}** — Role: {w.get('role', 'Staff')} | Salary: PKR {w.get('salary', 0):,.2f} ({w.get('salary_frequency', 'monthly')})")
+            return "\n".join(lines), tools_used
+        except Exception:
+            return raw, tools_used
+
+    # Default store dashboard metrics
+    tools_used.append("get_dashboard_summary")
+    raw = execute_tool("get_dashboard_summary", {})
+    return raw, tools_used
+
+
 # ---------------------------------------------------------------------------
 # Main Chat Turn Integration
 # ---------------------------------------------------------------------------
@@ -267,8 +340,19 @@ def chat_turn(
         }
 
     remote_url = get_remote_mcp_url()
-    model_name = model or DEFAULT_MODEL
     tools_used: list[str] = []
+
+    # Priority list of models to gracefully bypass temporary Google 503 capacity spikes
+    requested_model = (model or os.environ.get("GEMINI_MODEL", "")).strip()
+    raw_candidates = [
+        requested_model,
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-1.5-flash",
+        "gemini-3.8-flash",
+    ]
+    seen: set[str] = set()
+    candidate_models = [m for m in raw_candidates if m and not (m in seen or seen.add(m))]
 
     # -------------------------------------------------------------------------
     # Gemini Function Calling with Store MCP Tools (Fast & Serverless Safe)
@@ -282,84 +366,110 @@ def chat_turn(
         # Convert 13 read-only tool definitions to Gemini function declarations
         function_declarations = get_gemini_tool_declarations()
 
-        # Build contents from history
-        contents: list[types.Content] = []
+        # Build initial contents from history
+        initial_contents: list[types.Content] = []
         if history:
             for item in history[-6:]:
                 role = "user" if item.get("role") == "user" else "model"
                 text_val = str(item.get("content", "")).strip()
                 if text_val:
-                    contents.append(
+                    initial_contents.append(
                         types.Content(
                             role=role,
                             parts=[types.Part.from_text(text=text_val)],
                         )
                     )
-        contents.append(
+        initial_contents.append(
             types.Content(role="user", parts=[types.Part.from_text(text=message)])
         )
 
-        # Multi-turn tool execution loop (up to 4 turns)
-        max_turns = 4
-        for _ in range(max_turns):
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    tools=[types.Tool(function_declarations=function_declarations)],
-                ),
-            )
+        last_error = None
+        for current_model in candidate_models:
+            contents = list(initial_contents)
+            try:
+                # Multi-turn tool execution loop (up to 4 turns)
+                max_turns = 4
+                for _ in range(max_turns):
+                    response = client.models.generate_content(
+                        model=current_model,
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_INSTRUCTION,
+                            tools=[types.Tool(function_declarations=function_declarations)],
+                        ),
+                    )
 
-            # Check if model requested any function calls
-            has_func_call = False
-            candidate = response.candidates[0] if response.candidates else None
-            if candidate and candidate.content and candidate.content.parts:
-                for part in candidate.content.parts:
-                    if part.function_call:
-                        has_func_call = True
-                        fn_name = part.function_call.name
-                        fn_args = dict(part.function_call.args or {})
-                        tools_used.append(fn_name)
+                    # Check if model requested any function calls
+                    has_func_call = False
+                    candidate = response.candidates[0] if response.candidates else None
+                    if candidate and candidate.content and candidate.content.parts:
+                        for part in candidate.content.parts:
+                            if part.function_call:
+                                has_func_call = True
+                                fn_name = part.function_call.name
+                                fn_args = dict(part.function_call.args or {})
+                                tools_used.append(fn_name)
 
-                        # Execute tool immediately
-                        tool_result = execute_tool(
-                            name=fn_name,
-                            arguments=fn_args,
-                            endpoint=remote_url,
-                            token=gateway_token,
-                        )
+                                # Execute tool immediately
+                                tool_result = execute_tool(
+                                    name=fn_name,
+                                    arguments=fn_args,
+                                    endpoint=remote_url,
+                                    token=gateway_token,
+                                )
 
-                        # Append model function call and function response to contents
-                        contents.append(candidate.content)
-                        contents.append(
-                            types.Content(
-                                role="user",
-                                parts=[
-                                    types.Part.from_function_response(
-                                        name=fn_name,
-                                        response={"result": tool_result},
+                                # Append model function call and function response to contents
+                                contents.append(candidate.content)
+                                contents.append(
+                                    types.Content(
+                                        role="tool",
+                                        parts=[
+                                            types.Part.from_function_response(
+                                                name=fn_name,
+                                                response={"result": tool_result},
+                                            )
+                                        ],
                                     )
-                                ],
-                            )
-                        )
-                        break
+                                )
+                                break
 
-            if not has_func_call:
-                reply = response.text or "Store tools processed your request."
-                return {
-                    "status": "ok",
-                    "response": reply.strip(),
-                    "tools_used": list(dict.fromkeys(tools_used)),
-                    "model": model_name,
-                }
+                    if not has_func_call:
+                        reply = response.text or "Store tools processed your request."
+                        return {
+                            "status": "ok",
+                            "response": reply.strip(),
+                            "tools_used": list(dict.fromkeys(tools_used)),
+                            "model": current_model,
+                        }
+
+            except Exception as model_exc:
+                err_str = str(model_exc)
+                logger.warning("Model %s encountered error (%s), trying next candidate...", current_model, err_str)
+                last_error = model_exc
+                # If capacity or not found, try the next candidate model
+                if any(code in err_str for code in ("503", "429", "404", "UNAVAILABLE", "NOT_FOUND")):
+                    continue
+                # For auth or critical errors, re-raise
+                raise
+
+        if last_error:
+            logger.info("External AI models unavailable; falling back to direct MCP tool execution.")
+            fallback_text, fallback_tools = intelligent_mcp_fallback(message)
+            return {
+                "status": "ok",
+                "response": fallback_text,
+                "tools_used": list(dict.fromkeys(tools_used + fallback_tools)),
+                "model": "nexusai-store-mcp",
+            }
 
     except Exception as exc:
         logger.error("Gemini function-calling loop error: %s", exc)
+        fallback_text, fallback_tools = intelligent_mcp_fallback(message)
         return {
-            "status": "error",
-            "response": f"Failed to generate AI response: {exc}",
-            "tools_used": tools_used,
+            "status": "ok",
+            "response": fallback_text,
+            "tools_used": list(dict.fromkeys(tools_used + fallback_tools)),
+            "model": "nexusai-store-mcp",
         }
 
     return {

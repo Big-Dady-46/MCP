@@ -395,6 +395,12 @@ def overview():
     )
 
 
+@app.route("/favicon.ico")
+def favicon():
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#2563EB"/></svg>'
+    return Response(svg, mimetype="image/svg+xml", status=200)
+
+
 @app.route("/chat")
 def chat():
     return render_template(
