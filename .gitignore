@@ -16,3 +16,6 @@ store.db-shm
 .env
 .vercel/
 *.log
+
+.vercel
+.env*

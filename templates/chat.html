@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}AI Assistant · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">Google Gemini AI Assistant</h1>
+    <p class="page-sub">Connected to remote NexusAI MCP server (Streamable HTTP) with Bearer authentication.</p>
+  </div>
+  <div style="display:flex; gap:var(--s2); align-items:center;">
+    <span class="badge badge-ok">
+      <span class="dot dot-ok" aria-hidden="true"></span>
+      13 Read-Only Tools
+    </span>
+    <button class="btn btn-sm btn-secondary" id="clearChatBtn" type="button">Clear Chat</button>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom: var(--s5); background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 100%);">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s3);">
+    <div>
+      <div style="font-weight: 600; font-size: 15px; color: var(--primary);">Architecture: Google Gemini + Remote MCP Gateway</div>
+      <div style="font-size: 13px; color: var(--text-2); margin-top: 2px;">
+        Gemini automatically invokes remote store tools over Streamable HTTP at <code>{{ remote_mcp_url }}</code>.
+      </div>
+    </div>
+    <div style="display: flex; gap: var(--s2); flex-wrap: wrap; font-size: 13px;">
+      <span class="badge" style="background:#E0E7FF; color:#3730A3;">Model: {{ gemini_model }}</span>
+      <span class="badge" style="background:{% if gemini_configured %}#DCFCE7; color:#166534{% else %}#FEE2E2; color:#991B1B{% endif %};">
+        Gemini API: {% if gemini_configured %}Connected{% else %}Missing Key{% endif %}
+      </span>
+      <span class="badge" style="background:{% if gateway_token_configured %}#DCFCE7; color:#166534{% else %}#FEE2E2; color:#991B1B{% endif %};">
+        MCP Bearer: {% if gateway_token_configured %}Configured{% else %}Missing Token{% endif %}
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Suggestion Chips -->
+<div style="margin-bottom: var(--s4);">
+  <div style="font-size: var(--fs-label); color: var(--text-2); margin-bottom: var(--s2); font-weight: 500;">
+    Quick Questions for Gemini (auto-executes MCP tools):
+  </div>
+  <div class="chat-chips">
+    <button class="chat-chip" type="button" data-prompt="What products are currently low on stock or below reorder level?">
+      ⚠️ Low Stock Alerts
+    </button>
+    <button class="chat-chip" type="button" data-prompt="What are today's sales summary and revenue metrics?">
+      💰 Today's Sales Summary
+    </button>
+    <button class="chat-chip" type="button" data-prompt="Generate a complete monthly business report with revenue and profit.">
+      📊 Monthly Business Report
+    </button>
+    <button class="chat-chip" type="button" data-prompt="What is our total inventory valuation at cost and retail prices?">
+      📦 Stock Valuation
+    </button>
+    <button class="chat-chip" type="button" data-prompt="List active store products, categories, stock and prices in PKR.">
+      🏷️ Active Products &amp; Prices
+    </button>
+    <button class="chat-chip" type="button" data-prompt="List active workers, their roles and monthly salaries.">
+      👥 Workers &amp; Payroll
+    </button>
+  </div>
+</div>
+
+<!-- Chat Interface Card -->
+<div class="card chat-card">
+  <div class="chat-history" id="chatHistory" role="log" aria-live="polite">
+    <div class="chat-msg bot">
+      <div class="chat-avatar bot-avatar">
+        <svg class="ic ic-16" aria-hidden="true"><use href="#i-nodes"/></svg>
+      </div>
+      <div class="chat-bubble">
+        Hello! I am your <strong>Google Gemini AI</strong> assistant connected to the <strong>NexusAI Remote MCP Server</strong>.
+        I can inspect live beverage store inventory, sales, purchases, workers, expenses, and financial reports using read-only MCP tools.
+        How can I help you today?
+      </div>
+    </div>
+  </div>
+
+  <form class="chat-input-bar" id="chatForm">
+    <input type="text"
+           id="chatInput"
+           class="chat-input"
+           placeholder="Ask Gemini about products, stock levels, sales, purchases, or reports..."
+           autocomplete="off"
+           required>
+    <button type="submit" class="btn btn-primary" id="sendBtn">
+      <svg class="ic ic-16" aria-hidden="true"><use href="#i-play"/></svg>
+      <span>Ask Gemini</span>
+    </button>
+  </form>
+</div>
+
+<div class="callout" style="margin-top: var(--s5);">
+  <strong>Server-Side Security Note:</strong> <code>GEMINI_API_KEY</code> and <code>MCP_GATEWAY_TOKEN</code>
+  remain strictly server-side on your Vercel deployment. Tool invocations travel securely over Streamable HTTP
+  with Bearer authentication. Only the 13 read-only tools are exposed to the AI model.
+</div>
+
+<script>
+(function() {
+  const historyEl = document.getElementById("chatHistory");
+  const formEl = document.getElementById("chatForm");
+  const inputEl = document.getElementById("chatInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const clearBtn = document.getElementById("clearChatBtn");
+  const chips = document.querySelectorAll(".chat-chip");
+
+  let conversationHistory = [];
+
+  function appendMessage(role, text, toolsUsed) {
+    const msg = document.createElement("div");
+    msg.className = "chat-msg " + role;
+
+    const avatar = document.createElement("div");
+    avatar.className = "chat-avatar " + (role === "user" ? "user-avatar" : "bot-avatar");
+    avatar.innerHTML = role === "user" 
+      ? '<svg class="ic ic-16"><use href="#i-check-square"/></svg>'
+      : '<svg class="ic ic-16"><use href="#i-nodes"/></svg>';
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+
+    if (toolsUsed && toolsUsed.length > 0) {
+      const badge = document.createElement("div");
+      badge.className = "chat-tools-badge";
+      badge.innerHTML = '⚡ <em>MCP Tools:</em> <code>' + toolsUsed.join("</code>, <code>") + '</code>';
+      bubble.appendChild(badge);
+    }
+
+    const textDiv = document.createElement("div");
+    textDiv.className = "chat-text";
+    // Basic formatting for linebreaks & bold markdown
+    const formatted = text
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\n/g, "<br>");
+    textDiv.innerHTML = formatted;
+    bubble.appendChild(textDiv);
+
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    historyEl.appendChild(msg);
+    historyEl.scrollTop = historyEl.scrollHeight;
+
+    conversationHistory.push({ role: role, content: text });
+  }
+
+  function appendLoading() {
+    const loading = document.createElement("div");
+    loading.id = "chatLoading";
+    loading.className = "chat-msg bot";
+    loading.innerHTML = `
+      <div class="chat-avatar bot-avatar">
+        <svg class="ic ic-16"><use href="#i-nodes"/></svg>
+      </div>
+      <div class="chat-bubble">
+        <span class="dot dot-ok" style="animation: pulse 1s infinite;"></span>
+        <em>Gemini is querying remote MCP server...</em>
+      </div>
+    `;
+    historyEl.appendChild(loading);
+    historyEl.scrollTop = historyEl.scrollHeight;
+  }
+
+  function removeLoading() {
+    const el = document.getElementById("chatLoading");
+    if (el) el.remove();
+  }
+
+  async function sendMessage(text) {
+    if (!text || !text.trim()) return;
+    const userText = text.trim();
+    appendMessage("user", userText);
+    inputEl.value = "";
+    inputEl.disabled = true;
+    sendBtn.disabled = true;
+    appendLoading();
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userText,
+          history: conversationHistory.slice(-8)
+        })
+      });
+
+      const data = await response.json();
+      removeLoading();
+
+      if (data.status === "ok") {
+        appendMessage("bot", data.response, data.tools_used);
+      } else {
+        appendMessage("bot", "⚠️ " + (data.response || data.error || "An error occurred."));
+      }
+    } catch (err) {
+      removeLoading();
+      appendMessage("bot", "⚠️ Connection error: " + err.message);
+    } finally {
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  formEl.addEventListener("submit", function(e) {
+    e.preventDefault();
+    sendMessage(inputEl.value);
+  });
+
+  chips.forEach(chip => {
+    chip.addEventListener("click", function() {
+      const prompt = this.getAttribute("data-prompt");
+      if (prompt) {
+        inputEl.value = prompt;
+        sendMessage(prompt);
+      }
+    });
+  });
+
+  clearBtn.addEventListener("click", function() {
+    conversationHistory = [];
+    historyEl.innerHTML = `
+      <div class="chat-msg bot">
+        <div class="chat-avatar bot-avatar">
+          <svg class="ic ic-16"><use href="#i-nodes"/></svg>
+        </div>
+        <div class="chat-bubble">
+          Chat cleared. Ask me anything about store stock, sales, purchases, or reports!
+        </div>
+      </div>
+    `;
+  });
+})();
+</script>
+{% endblock %}
+

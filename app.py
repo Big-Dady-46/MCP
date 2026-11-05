@@ -32,6 +32,7 @@ from flask import (
 )
 
 import database as db
+import gemini_mcp
 import mcp_server
 import oauth_meta
 import store_routes
@@ -69,6 +70,7 @@ app.register_blueprint(store_routes.bp)
 
 NAV_ITEMS = [
     ("overview", "Overview", "i-grid"),
+    ("chat", "AI Assistant", "i-nodes"),
     ("tasks", "My Tasks", "i-check-square"),
     ("store.dashboard", "Store", "i-cart"),
     ("store.products", "Products", "i-box"),
@@ -93,10 +95,15 @@ NAV_ITEMS = [
 def protect_post():
     if request.method != "POST":
         return None
-    # MCP/OAuth protocol endpoints are authenticated by bearer tokens or the
-    # OAuth flow itself (not by browser cookies), so CSRF does not apply.
+    # MCP/OAuth protocol and API endpoints are authenticated by tokens or JSON payloads
+    # (not browser cookies), so form CSRF does not apply.
     path = request.path
-    if path == "/mcp" or path.startswith("/mcp/") or path.startswith("/mcp_gateway"):
+    if (
+        path == "/mcp"
+        or path.startswith("/mcp/")
+        or path.startswith("/mcp_gateway")
+        or path.startswith("/api/")
+    ):
         return None
     token = session.get("csrf_token")
     if not token:
@@ -386,6 +393,28 @@ def overview():
         activities=db.list_activities(6),
         inspector_cmd=inspector_command(),
     )
+
+
+@app.route("/chat")
+def chat():
+    return render_template(
+        "chat.html",
+        gemini_configured=bool(gemini_mcp.get_gemini_api_key()),
+        gateway_token_configured=bool(gemini_mcp.get_mcp_gateway_token()),
+        remote_mcp_url=gemini_mcp.get_remote_mcp_url(),
+        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
+    )
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message", "")).strip()
+    history = data.get("history") or []
+    if not message:
+        return jsonify({"status": "error", "response": "Empty message."}), 400
+    res = gemini_mcp.chat_turn(message=message, history=history)
+    return jsonify(res)
 
 
 @app.route("/tasks")
