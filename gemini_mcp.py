@@ -364,7 +364,10 @@ def chat_turn(
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=4.0),
+        )
 
         # Convert 13 read-only tool definitions to Gemini function declarations
         function_declarations = get_gemini_tool_declarations()
