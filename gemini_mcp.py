@@ -524,6 +524,16 @@ def chat_turn(
             "tools_used": [],
         }
 
+    # 1. Ultra-fast direct MCP path for standard operational store queries (sub-20ms instant reply)
+    fast_text, fast_tools = intelligent_mcp_fallback(message)
+    if fast_tools:
+        return {
+            "status": "ok",
+            "response": fast_text,
+            "tools_used": fast_tools,
+            "model": "nexusai-mcp-fast",
+        }
+
     remote_url = get_remote_mcp_url()
     tools_used: list[str] = []
 
