@@ -417,7 +417,8 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
         "samaan", "product", "item", "stock", "maal", "list", "beverage",
         "price", "qeemat", "rate", "botal", "bottle", "store", "para", "pari",
         "pada", "padi", "kya kuch", "kaya kuch", "kia kuch", "kya kya", "kaya kaya",
-        "kia kia", "kya hai", "kaya hai", "kia hai", "mojood", "items", "inventory"
+        "kia kia", "kya hai", "kaya hai", "kia hai", "mojood", "items", "inventory",
+        "7up", "coke", "coca", "fanta", "pepsi", "sprite", "water", "mineral"
     )):
         tools_used.append("list_products")
         raw = execute_tool("list_products", {})
@@ -425,6 +426,23 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
             items = json.loads(raw)
             if not items:
                 return "The store inventory is currently empty.", tools_used
+
+            # Check if user specifically asked about a specific product/brand
+            specific_brands = ["7up", "coca-cola", "coca", "cola", "coke", "fanta", "pepsi", "sprite", "water", "mineral"]
+            matched_brand = next((b for b in specific_brands if b in msg_clean), None)
+            if matched_brand:
+                filtered = [
+                    p for p in items
+                    if matched_brand in p["name"].lower() or matched_brand in (p.get("brand") or "").lower()
+                ]
+                if filtered:
+                    p = filtered[0]
+                    size = f" ({p['size_label']})" if p.get('size_label') else ""
+                    return (
+                        f"We currently have **{p['stock_units']} bottles** of **{p['name']}**{size} in stock, "
+                        f"priced at **PKR {p.get('sell_price', 0):.2f}** per bottle."
+                    ), tools_used
+
             lines = ["📦 **Current Store Inventory & Live Stock:**\n"]
             for p in items:
                 size = f" ({p['size_label']})" if p.get('size_label') else ""
@@ -476,6 +494,42 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
     )
 
 
+def get_live_store_context() -> str:
+    """Retrieve real-time store database snapshot to empower Gemini AI context."""
+    try:
+        import store_db as sdb
+        if not sdb.demo_seeded():
+            sdb.init_db()
+            sdb.seed_demo()
+        import store_server
+        products_raw = store_server.list_products()
+        products = json.loads(products_raw) if isinstance(products_raw, str) else products_raw
+
+        prod_summaries = []
+        for p in (products or []):
+            prod_summaries.append(
+                f"- {p['name']} ({p.get('size_label', '')}): {p['stock_units']} bottles in stock, "
+                f"cost PKR {p.get('unit_cost', 0):.2f}, retail price PKR {p.get('sell_price', 0):.2f}, "
+                f"reorder level: {p.get('reorder_level', 0)}"
+            )
+
+        summary_raw = store_server.get_sales_summary()
+        summary = json.loads(summary_raw) if isinstance(summary_raw, str) else (summary_raw or {})
+
+        workers_raw = store_server.list_workers()
+        workers = json.loads(workers_raw) if isinstance(workers_raw, str) else (workers_raw or [])
+        worker_summaries = [f"{w['name']} ({w.get('role', 'Staff')}, PKR {w.get('salary', 0):,.2f})" for w in workers]
+
+        return (
+            "CURRENT LIVE STORE METRICS & DATABASE STATE:\n"
+            + "Products:\n" + "\n".join(prod_summaries)
+            + f"\nSales Metrics: {summary.get('count', 0)} completed orders, Total Revenue PKR {summary.get('revenue', 0.0):,.2f}, Gross Profit PKR {summary.get('gross_profit', 0.0):,.2f}\n"
+            + f"Active Workers: {', '.join(worker_summaries)}\n"
+        )
+    except Exception as exc:
+        return f"Store context snapshot unavailable: {exc}"
+
+
 # ---------------------------------------------------------------------------
 # Main Chat Turn Integration
 # ---------------------------------------------------------------------------
@@ -524,16 +578,6 @@ def chat_turn(
             "tools_used": [],
         }
 
-    # 1. Ultra-fast direct MCP path for standard operational store queries (sub-20ms instant reply)
-    fast_text, fast_tools = intelligent_mcp_fallback(message)
-    if fast_tools:
-        return {
-            "status": "ok",
-            "response": fast_text,
-            "tools_used": fast_tools,
-            "model": "nexusai-mcp-fast",
-        }
-
     remote_url = get_remote_mcp_url()
     tools_used: list[str] = []
 
@@ -541,7 +585,7 @@ def chat_turn(
     model_name = (model or os.environ.get("GEMINI_MODEL", "")).strip() or "gemini-3.8-flash"
 
     # -------------------------------------------------------------------------
-    # Gemini Function Calling with Store MCP Tools (Fast & Serverless Safe)
+    # Gemini AI Generation with Live Store Knowledge and Function Calling Tools
     # -------------------------------------------------------------------------
     try:
         from google import genai
@@ -554,6 +598,10 @@ def chat_turn(
 
         # Convert 13 read-only tool definitions to Gemini function declarations
         function_declarations = get_gemini_tool_declarations()
+
+        # Build comprehensive system instruction with live store data
+        live_context = get_live_store_context()
+        full_system_instruction = f"{SYSTEM_INSTRUCTION}\n\n{live_context}"
 
         # Build initial contents from history
         initial_contents: list[types.Content] = []
@@ -581,7 +629,7 @@ def chat_turn(
                     model=model_name,
                     contents=contents,
                     config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
+                        system_instruction=full_system_instruction,
                         tools=[types.Tool(function_declarations=function_declarations)],
                     ),
                 )
