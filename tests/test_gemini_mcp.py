@@ -95,3 +95,15 @@ def test_api_chat_flow(client):
         assert "Cola" in data["response"]
         assert data["tools_used"] == ["get_low_stock"]
 
+
+def test_conversational_shortcuts():
+    """Greetings and pleasantries return natural conversational text without tools."""
+    for prompt in ["hello", "hi", "salam", "done", "ok", "theek hai"]:
+        res = gemini_mcp.chat_turn(prompt)
+        assert res["status"] == "ok"
+        assert res["tools_used"] == []
+        assert len(res["response"]) > 0
+        # Ensure raw dashboard json is never dumped
+        assert '"stock_units_total"' not in res["response"]
+
+

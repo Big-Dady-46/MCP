@@ -33,13 +33,14 @@ DEFAULT_REMOTE_MCP_URL = "https://mcp-control.vercel.app/mcp"
 DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 SYSTEM_INSTRUCTION = (
-    "You are the NexusAI Beverage Store AI Assistant. You have access to real-time "
-    "store data through the remote NexusAI MCP server tools. Always query the appropriate "
-    "read-only tools to retrieve accurate, live data before answering questions regarding "
-    "products, stock levels, reorder alerts, sales history, daily summaries, purchases, "
-    "workers, salaries, expenses, stock valuations, or business reports.\n"
-    "Store amounts and prices are in Pakistani Rupees (PKR).\n"
-    "Be concise, helpful, and format financial numbers clearly."
+    "You are the friendly, intelligent AI Chatbot for NexusAI Beverage Store.\n"
+    "Important rules:\n"
+    "- If the user says hello, hi, salam, ok, done, thanks, or casual greetings, reply politely and conversationally like a chatbot without calling any tools.\n"
+    "- Only call store tools when the user specifically asks about store data (products, inventory, low stock, sales, purchases, workers, expenses, or reports).\n"
+    "- If the user asks for categories or product types, group and name the categories/brands cleanly without dumping full inventory tables.\n"
+    "- Never dump raw JSON or raw database objects in your answers.\n"
+    "- Currency is Pakistani Rupees (PKR).\n"
+    "- Respond in the language used by the user (Urdu / Roman Urdu / English) naturally and concisely."
 )
 
 ALLOWED_READ_ONLY_TOOLS = {
@@ -237,34 +238,130 @@ def get_gemini_tool_declarations() -> list[dict[str, Any]]:
     return declarations
 
 
+def check_conversational_shortcut(message: str) -> str | None:
+    """Return an instant chatbot reply for greetings, acknowledgments, or pleasantries
+    without calling any store tools or external APIs.
+    """
+    msg_clean = message.strip().lower()
+    if not msg_clean:
+        return "G, main aapki beverage store ke hawalay se kya madad kar sakta hoon?"
+
+    # If the message contains any store-specific keyword, do NOT shortcut: let the store handler process it
+    store_keywords = (
+        "samaan", "product", "item", "stock", "maal", "list", "beverage", "price",
+        "qeemat", "rate", "botal", "bottle", "sale", "bikri", "becha", "revenue",
+        "kamai", "gross", "income", "munafa", "report", "profit", "loss", "faida",
+        "nuqsan", "valuation", "hisab", "balance", "worker", "mulazim", "staff",
+        "salary", "tankhwah", "payroll", "purchase", "kharid", "order", "category",
+        "categories", "brand", "types", "low stock", "shortage", "inventory"
+    )
+    if any(k in msg_clean for k in store_keywords):
+        return None
+
+    # Exact greeting or greeting phrase
+    greetings = {
+        "hello", "hi", "hey", "salam", "assalam", "assalam o alaikum", "assalamu alaikum",
+        "aoa", "kese ho", "kaise ho", "kia haal hai", "kya haal hai", "kia hal ha", "kia hal hai",
+        "hal chal", "kya hal he", "kia hal he", "good morning", "good evening", "good afternoon"
+    }
+    if msg_clean in greetings or any(msg_clean.startswith(g + " ") or msg_clean.startswith(g + "!") or msg_clean.startswith(g + ",") or msg_clean.startswith(g + "?") for g in greetings):
+        return (
+            "Hello! Kaise hain aap? Main NexusAI Beverage Store AI Assistant hoon. "
+            "Aap mujh se store ke stock, products, sales, purchases ya reports ke bare mein pooch sakte hain. "
+            "Bataiye main aapki kya madad kar sakta hoon?"
+        )
+
+    # Acknowledgments and closings
+    acknowledgments = {
+        "done", "ok", "okay", "theek", "theek hai", "thik hai", "achha", "acha",
+        "shukriya", "thanks", "thank you", "thx", "ty", "bye", "allah hafiz", "khuda hafiz",
+        "great", "zabardast", "good job", "nice", "fine", "cool", "perfect", "done sir", "ok done"
+    }
+    if msg_clean in acknowledgments or any(msg_clean.startswith(a + " ") or msg_clean.startswith(a + ".") or msg_clean.startswith(a + "!") for a in acknowledgments):
+        return (
+            "Bohat behtareen! Agar store, stock ya sales ke hawalay se koi mazeed sawal ho to zaroor batayein."
+        )
+
+    # Bot identity / capability inquiries
+    bot_info = {
+        "who are you", "tum kaun ho", "tum kon ho", "aap kaun hain", "aap kon hain",
+        "what can you do", "kya kar sakte ho", "kia kar saktay ho", "help", "madad"
+    }
+    if any(b in msg_clean for b in bot_info):
+        return (
+            "Main NexusAI Beverage Store ka AI Assistant hoon. "
+            "Main aapko store ke inventory stock, live products, low stock alerts, "
+            "sales summary, purchases, workers aur business reports ke bare mein live aur accurate maloomat faraham kar sakta hoon."
+        )
+
+    return None
+
+
 def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
-    """Directly query and format read-only MCP store tools if external cloud AI is temporarily overloaded."""
-    msg_lower = message.lower()
+    """Conversational fallback when cloud AI encounters a temporary network issue."""
+    msg_clean = message.strip().lower()
     tools_used = []
 
-    # 1. Low stock / reorder alerts
-    if any(k in msg_lower for k in ("low", "kam", "stock alert", "reorder", "khatam", "shortage")):
+    # 1. Greetings / Conversational (NO tools needed)
+    greetings = {"hello", "hi", "hey", "salam", "assalam o alaikum", "aoa", "kese ho", "kaise ho", "kia haal hai", "kya haal hai", "kia hal ha", "hal chal"}
+    if any(msg_clean == g or msg_clean.startswith(g + " ") or msg_clean.startswith(g + "!") or msg_clean.startswith(g + ",") for g in greetings):
+        return (
+            "Hello! Kaise hain aap? Main NexusAI Beverage Store AI Assistant hoon. "
+            "Aap mujh se store ke samaan, stock levels, sales, purchases ya reports ke bare mein pooch sakte hain. "
+            "Bataiye main aapki kya madad kar sakta hoon?",
+            []
+        )
+
+    # 2. Acknowledgements & Closing (NO tools needed)
+    acks = {"done", "ok", "okay", "theek", "theek hai", "thik hai", "achha", "acha", "shukriya", "thanks", "thank you", "bye", "allah hafiz", "khuda hafiz"}
+    if any(msg_clean == a or msg_clean.startswith(a + " ") or msg_clean.startswith(a + ".") or msg_clean.startswith(a + "!") for a in acks):
+        return (
+            "Bohat khoob! Agar store ke hawalay se koi mazeed sawal ho ya kisi cheez ki report chahiye ho to zaroor batayein.",
+            []
+        )
+
+    # 3. Product Categories / Brands / Types only (Clean list, not full inventory dump)
+    if any(k in msg_clean for k in ("category", "categories", "kis kis", "types", "brands", "aqsaam")):
+        tools_used.append("list_products")
+        raw = execute_tool("list_products", {})
+        try:
+            items = json.loads(raw)
+            brands: dict[str, list[str]] = {}
+            for p in items:
+                b = p.get("brand") or "Beverages"
+                size = f" ({p['size_label']})" if p.get("size_label") else ""
+                clean_name = p['name'].replace("[DEMO] ", "").strip()
+                brands.setdefault(b, []).append(f"{clean_name}{size}")
+            lines = ["Hamare store mein yeh main categories aur products mojood hain:\n"]
+            for brand, p_list in brands.items():
+                lines.append(f"• **{brand}:** {', '.join(p_list)}")
+            return "\n".join(lines), tools_used
+        except Exception:
+            return raw, tools_used
+
+    # 4. Low stock / reorder alerts
+    if any(k in msg_clean for k in ("low", "kam", "stock alert", "reorder", "khatam", "shortage", "khatam hone")):
         tools_used.append("get_low_stock")
         raw = execute_tool("get_low_stock", {})
         try:
             items = json.loads(raw)
             if not items:
-                return "Filhal koi product low-stock par nahi hai. Sab products ka stock normal level par hai.", tools_used
+                return "Filhal koi product low-stock par nahi hai. Sabhi products ka stock normal level par hai.", tools_used
             lines = ["⚠️ **Low Stock Products (Reorder level se kam/barabar):**\n"]
             for p in items:
-                lines.append(f"- **{p['name']}** ({p.get('size_label', '')}): **{p['stock_units']} bottles** mojood (Reorder limit: {p['reorder_level']})")
+                lines.append(f"- **{p['name']}** ({p.get('size_label', '')}): **{p['stock_units']} bottles** (Reorder limit: {p['reorder_level']})")
             return "\n".join(lines), tools_used
         except Exception:
             return raw, tools_used
 
-    # 2. Products / Inventory / Samaan / Prices
-    if any(k in msg_lower for k in ("samaan", "product", "item", "stock", "maal", "list", "cheez", "beverage", "price", "kitna", "botal")):
+    # 5. Products / Samaan / Inventory / Stock / Prices
+    if any(k in msg_clean for k in ("samaan", "product", "item", "stock", "maal", "list", "beverage", "price", "qeemat", "rate", "botal")):
         tools_used.append("list_products")
         raw = execute_tool("list_products", {})
         try:
             items = json.loads(raw)
             if not items:
-                return "Store mein filhal koi product nahi mila (stock khali hai).", tools_used
+                return "Store mein filhal koi product register nahi hai.", tools_used
             lines = ["📦 **Store mein mojood samaan aur unka live stock:**\n"]
             for p in items:
                 size = f" ({p['size_label']})" if p.get('size_label') else ""
@@ -273,29 +370,29 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
         except Exception:
             return raw, tools_used
 
-    # 3. Sales / POS / Revenue
-    if any(k in msg_lower for k in ("sale", "bikri", "becha", "revenue", "kamai", "gross", "income")):
+    # 6. Sales / POS / Revenue
+    if any(k in msg_clean for k in ("sale", "bikri", "becha", "revenue", "kamai", "gross", "income", "munafa")):
         tools_used.append("get_sales_summary")
         raw = execute_tool("get_sales_summary", {})
         try:
             data = json.loads(raw)
             return (
-                f"💰 **Live Sales Summary:**\n"
-                f"- Total Sales: {data.get('count', 0)}\n"
+                f"💰 **Live Sales Summary (Today):**\n"
+                f"- Total Sales Orders: {data.get('count', 0)}\n"
                 f"- Total Revenue: PKR {data.get('revenue', 0.0):,.2f}\n"
                 f"- Gross Profit: PKR {data.get('gross_profit', 0.0):,.2f}"
             ), tools_used
         except Exception:
             return raw, tools_used
 
-    # 4. Report / Profit & Loss / Business valuation
-    if any(k in msg_lower for k in ("report", "profit", "loss", "faida", "nuqsan", "valuation", "hisab")):
+    # 7. Report / Profit & Loss / Business valuation
+    if any(k in msg_clean for k in ("report", "profit", "loss", "faida", "nuqsan", "valuation", "hisab", "balance")):
         tools_used.append("generate_business_report")
         report = execute_tool("generate_business_report", {"period": "month"})
         return report, tools_used
 
-    # 5. Workers / Payroll / Staff
-    if any(k in msg_lower for k in ("worker", "mulazim", "staff", "salary", "tankhwah", "payroll", "kam karnay")):
+    # 8. Workers / Payroll / Staff
+    if any(k in msg_clean for k in ("worker", "mulazim", "staff", "salary", "tankhwah", "payroll", "kam karnay")):
         tools_used.append("list_workers")
         raw = execute_tool("list_workers", {})
         try:
@@ -307,10 +404,12 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
         except Exception:
             return raw, tools_used
 
-    # Default store dashboard metrics
-    tools_used.append("get_dashboard_summary")
-    raw = execute_tool("get_dashboard_summary", {})
-    return raw, tools_used
+    # 9. Generic query (Natural Chatbot response, NEVER raw JSON!)
+    return (
+        "G, main aapki beverage store ke hawalay se madad kar sakta hoon. "
+        "Aap mujh se store stock, products ki list, low stock alerts, sales ya reports ke bare mein pooch sakte hain.",
+        []
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +426,16 @@ def chat_turn(
     Returns:
         dict: {"status": "ok"|"error", "response": str, "tools_used": list[str]}
     """
+    # 0. Conversational shortcut (instant reply for greetings / done / ok without tool calling or data dumping)
+    conv_reply = check_conversational_shortcut(message)
+    if conv_reply:
+        return {
+            "status": "ok",
+            "response": conv_reply,
+            "tools_used": [],
+            "model": "nexusai-chat",
+        }
+
     api_key = get_gemini_api_key()
     if not api_key:
         return {
