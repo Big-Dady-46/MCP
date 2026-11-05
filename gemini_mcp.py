@@ -154,6 +154,15 @@ def execute_tool(
 
     args = arguments or {}
 
+    # Ensure store database has seed/demo data on serverless cold starts
+    try:
+        import store_db as sdb
+        if not sdb.demo_seeded():
+            sdb.init_db()
+            sdb.seed_demo()
+    except Exception:
+        pass
+
     # Fast path: direct store_server execution (instant, avoids serverless recursion)
     try:
         import store_server
@@ -254,9 +263,12 @@ def intelligent_mcp_fallback(message: str) -> tuple[str, list[str]]:
         raw = execute_tool("list_products", {})
         try:
             items = json.loads(raw)
+            if not items:
+                return "Store mein filhal koi product nahi mila (stock khali hai).", tools_used
             lines = ["📦 **Store mein mojood samaan aur unka live stock:**\n"]
             for p in items:
-                lines.append(f"- **{p['name']}** ({p.get('size_label', '')}): **{p['stock_units']} bottles** | Price: PKR {p.get('sell_price', 0):.2f}")
+                size = f" ({p['size_label']})" if p.get('size_label') else ""
+                lines.append(f"- **{p['name']}**{size}: **{p['stock_units']} bottles** | Price: PKR {p.get('sell_price', 0):.2f}")
             return "\n".join(lines), tools_used
         except Exception:
             return raw, tools_used
@@ -342,17 +354,8 @@ def chat_turn(
     remote_url = get_remote_mcp_url()
     tools_used: list[str] = []
 
-    # Priority list of models to gracefully bypass temporary Google 503 capacity spikes
-    requested_model = (model or os.environ.get("GEMINI_MODEL", "")).strip()
-    raw_candidates = [
-        requested_model,
-        "gemini-2.0-flash",
-        "gemini-2.5-flash",
-        "gemini-1.5-flash",
-        "gemini-3.8-flash",
-    ]
-    seen: set[str] = set()
-    candidate_models = [m for m in raw_candidates if m and not (m in seen or seen.add(m))]
+    # The valid current Google Gemini model
+    model_name = (model or os.environ.get("GEMINI_MODEL", "")).strip() or "gemini-3.8-flash"
 
     # -------------------------------------------------------------------------
     # Gemini Function Calling with Store MCP Tools (Fast & Serverless Safe)
@@ -383,77 +386,65 @@ def chat_turn(
             types.Content(role="user", parts=[types.Part.from_text(text=message)])
         )
 
-        last_error = None
-        for current_model in candidate_models:
-            contents = list(initial_contents)
-            try:
-                # Multi-turn tool execution loop (up to 4 turns)
-                max_turns = 4
-                for _ in range(max_turns):
-                    response = client.models.generate_content(
-                        model=current_model,
-                        contents=contents,
-                        config=types.GenerateContentConfig(
-                            system_instruction=SYSTEM_INSTRUCTION,
-                            tools=[types.Tool(function_declarations=function_declarations)],
-                        ),
-                    )
+        contents = list(initial_contents)
+        try:
+            # Multi-turn tool execution loop (up to 4 turns)
+            max_turns = 4
+            for _ in range(max_turns):
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        tools=[types.Tool(function_declarations=function_declarations)],
+                    ),
+                )
 
-                    # Check if model requested any function calls
-                    has_func_call = False
-                    candidate = response.candidates[0] if response.candidates else None
-                    if candidate and candidate.content and candidate.content.parts:
-                        for part in candidate.content.parts:
-                            if part.function_call:
-                                has_func_call = True
-                                fn_name = part.function_call.name
-                                fn_args = dict(part.function_call.args or {})
-                                tools_used.append(fn_name)
+                # Check if model requested any function calls
+                has_func_call = False
+                candidate = response.candidates[0] if response.candidates else None
+                if candidate and candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if part.function_call:
+                            has_func_call = True
+                            fn_name = part.function_call.name
+                            fn_args = dict(part.function_call.args or {})
+                            tools_used.append(fn_name)
 
-                                # Execute tool immediately
-                                tool_result = execute_tool(
-                                    name=fn_name,
-                                    arguments=fn_args,
-                                    endpoint=remote_url,
-                                    token=gateway_token,
+                            # Execute tool immediately
+                            tool_result = execute_tool(
+                                name=fn_name,
+                                arguments=fn_args,
+                                endpoint=remote_url,
+                                token=gateway_token,
+                            )
+
+                            # Append model function call and function response to contents
+                            contents.append(candidate.content)
+                            contents.append(
+                                types.Content(
+                                    role="tool",
+                                    parts=[
+                                        types.Part.from_function_response(
+                                            name=fn_name,
+                                            response={"result": tool_result},
+                                        )
+                                    ],
                                 )
+                            )
+                            break
 
-                                # Append model function call and function response to contents
-                                contents.append(candidate.content)
-                                contents.append(
-                                    types.Content(
-                                        role="tool",
-                                        parts=[
-                                            types.Part.from_function_response(
-                                                name=fn_name,
-                                                response={"result": tool_result},
-                                            )
-                                        ],
-                                    )
-                                )
-                                break
+                if not has_func_call:
+                    reply = response.text or "Store tools processed your request."
+                    return {
+                        "status": "ok",
+                        "response": reply.strip(),
+                        "tools_used": list(dict.fromkeys(tools_used)),
+                        "model": model_name,
+                    }
 
-                    if not has_func_call:
-                        reply = response.text or "Store tools processed your request."
-                        return {
-                            "status": "ok",
-                            "response": reply.strip(),
-                            "tools_used": list(dict.fromkeys(tools_used)),
-                            "model": current_model,
-                        }
-
-            except Exception as model_exc:
-                err_str = str(model_exc)
-                logger.warning("Model %s encountered error (%s), trying next candidate...", current_model, err_str)
-                last_error = model_exc
-                # If capacity or not found, try the next candidate model
-                if any(code in err_str for code in ("503", "429", "404", "UNAVAILABLE", "NOT_FOUND")):
-                    continue
-                # For auth or critical errors, re-raise
-                raise
-
-        if last_error:
-            logger.info("External AI models unavailable; falling back to direct MCP tool execution.")
+        except Exception as model_exc:
+            logger.warning("Gemini model %s hit exception (%s), using intelligent MCP store fallback.", model_name, model_exc)
             fallback_text, fallback_tools = intelligent_mcp_fallback(message)
             return {
                 "status": "ok",
